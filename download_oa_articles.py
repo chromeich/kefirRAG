@@ -10,8 +10,15 @@ Pipeline:
 6. Download PDF files
 
 Examples:
-    python3 download_oa_articles.py --email you@example.com
-    CORE_API_KEY=... python3 download_oa_articles.py --email you@example.com --max-results 3
+    python3 download_oa_articles.py \
+        "Active chitosan/PVA films with anthocyanins from Brassica oleraceae" \
+        --out-dir ./my_pdfs \
+        --page-size 25 \
+        --email you@example.com \
+        --openalex-key YOUR_OPENALEX_KEY \
+        --core-key YOUR_CORE_KEY
+
+PDFs and the JSON report are saved under <out-dir>/<query-name>/.
 
 Unpaywall requires a real email. OpenAlex may require an API key. CORE requires
 an API key, so the CORE step is skipped unless --core-key or CORE_API_KEY is set.
@@ -30,13 +37,15 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
-DEFAULT_QUERY = "Active chitosan/PVA ﬁlms with anthocyanins from Brassica oleraceae"
+DEFAULT_QUERY = "milk fermentation"
+DEFAULT_PAGE_SIZE = 100
+OPENALEX_SEARCH_PARAM = "search.title_and_abstract"
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 UNPAYWALL_DOI_URL = "https://api.unpaywall.org/v2/{doi}"
@@ -107,6 +116,13 @@ def safe_filename(title: str, doi: str | None = None, suffix: str = ".pdf") -> s
     return f"{base[:110]}_{digest}{suffix}"
 
 
+def safe_dirname(value: str, max_length: int = 140) -> str:
+    base = normalize_text(value)
+    base = unicodedata.normalize("NFKD", base).encode("ascii", "ignore").decode("ascii")
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._-")
+    return base[:max_length].rstrip("._-") or "query"
+
+
 def requote_url(url: str) -> str:
     parts = urlsplit(url.strip())
     path = quote(parts.path, safe="/:%")
@@ -174,35 +190,21 @@ def log(message: str) -> None:
     print(message, flush=True)
 
 
-def openalex_search(
-    query: str,
-    *,
-    email: str | None,
-    api_key: str | None,
-    max_results: int,
-    timeout: float,
-) -> list[Article]:
-    params: dict[str, Any] = {
-        "search": query,
-        "per_page": max_results,
-        "sort": "relevance_score:desc",
-    }
-    if email:
-        params["mailto"] = email
-    if api_key:
-        params["api_key"] = api_key
+def format_count(value: int | None) -> str:
+    return "unknown" if value is None else f"{value:,}"
 
-    data = get_json(
-        OPENALEX_WORKS_URL,
-        params=params,
-        headers=http_headers(email),
-        timeout=timeout,
-    )
 
+def format_ratio(part: int, total: int | None) -> str:
+    if not total:
+        return "n/a"
+    return f"{part / total:.2%}"
+
+
+def build_openalex_articles(items: list[dict[str, Any]], fallback_title: str) -> list[Article]:
     articles: list[Article] = []
-    for item in data.get("results", []):
+    for item in items:
         ids = item.get("ids") or {}
-        title = normalize_text(item.get("title") or item.get("display_name") or query)
+        title = normalize_text(item.get("title") or item.get("display_name") or fallback_title)
         articles.append(
             Article(
                 title=title,
@@ -216,6 +218,55 @@ def openalex_search(
             )
         )
     return articles
+
+
+def openalex_search_pages(
+    query: str,
+    *,
+    email: str | None,
+    api_key: str | None,
+    max_results: int,
+    page_size: int,
+    timeout: float,
+) -> Iterator[tuple[int, list[Article], dict[str, Any]]]:
+    cursor = "*"
+    page_number = 1
+    remaining = max_results
+
+    while remaining > 0:
+        current_page_size = min(page_size, remaining)
+        params: dict[str, Any] = {
+            OPENALEX_SEARCH_PARAM: query,
+            "per_page": current_page_size,
+            "cursor": cursor,
+            "sort": "relevance_score:desc",
+        }
+        if email:
+            params["mailto"] = email
+        if api_key:
+            params["api_key"] = api_key
+
+        data = get_json(
+            OPENALEX_WORKS_URL,
+            params=params,
+            headers=http_headers(email),
+            timeout=timeout,
+        )
+        results = data.get("results") or []
+        if not results:
+            break
+
+        meta = data.get("meta") or {}
+        articles = build_openalex_articles(results, query)
+        yield page_number, articles, meta
+        remaining -= len(articles)
+
+        next_cursor = meta.get("next_cursor")
+        if not next_cursor or len(results) < current_page_size:
+            break
+
+        cursor = next_cursor
+        page_number += 1
 
 
 def openalex_pdf_candidates(article: Article) -> list[PdfCandidate]:
@@ -543,6 +594,23 @@ def save_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer") from exc
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
+def openalex_page_size(value: str) -> int:
+    number = positive_int(value)
+    if number > 200:
+        raise argparse.ArgumentTypeError("OpenAlex page size must be between 1 and 200")
+    return number
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Find OA article PDFs through OpenAlex, Unpaywall, Europe PMC and CORE.",
@@ -572,13 +640,19 @@ def parse_args() -> argparse.Namespace:
         "--out-dir",
         type=Path,
         default=None,
-        help="Download directory. Defaults to ./downloaded_pdfs next to this script.",
+        help="Base download directory. PDFs go to <out-dir>/<query-name>. Defaults to ./downloaded_pdfs.",
     )
     parser.add_argument(
         "--max-results",
-        type=int,
+        type=positive_int,
         default=5,
-        help="Max OpenAlex works to process.",
+        help="Total max OpenAlex works to process.",
+    )
+    parser.add_argument(
+        "--page-size",
+        type=openalex_page_size,
+        default=DEFAULT_PAGE_SIZE,
+        help=f"OpenAlex metadata page/chunk size, 1-200. Defaults to {DEFAULT_PAGE_SIZE}.",
     )
     parser.add_argument(
         "--timeout",
@@ -603,32 +677,50 @@ def main() -> int:
     args = parse_args()
     query = normalize_text(args.query)
     script_dir = Path(__file__).resolve().parent
-    out_dir = args.out_dir.resolve() if args.out_dir else script_dir / "downloaded_pdfs"
+    base_out_dir = args.out_dir.resolve() if args.out_dir else script_dir / "downloaded_pdfs"
+    query_dir_name = safe_dirname(query)
+    out_dir = base_out_dir / query_dir_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     report: dict[str, Any] = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "query": args.query,
         "normalized_query": query,
+        "base_out_dir": str(base_out_dir),
+        "query_dir_name": query_dir_name,
         "out_dir": str(out_dir),
+        "openalex_search_param": OPENALEX_SEARCH_PARAM,
+        "openalex_total_works": None,
+        "openalex_max_results": args.max_results,
+        "openalex_page_size": args.page_size,
         "articles": [],
     }
 
     log(f"Папка для PDF: {out_dir}")
     if not args.openalex_key:
         log("OpenAlex API key не задан: если OpenAlex вернет 401/403, передай --openalex-key или OPENALEX_API_KEY.")
-    log("1. OpenAlex: получаю метаданные...")
+    log(f"1. OpenAlex: получаю метаданные по {OPENALEX_SEARCH_PARAM} страницами до {args.page_size} работ...")
+    articles: list[Article] = []
+    openalex_total_works: int | None = None
     try:
-        articles = openalex_search(
+        pages = openalex_search_pages(
             query,
             email=args.email,
             api_key=args.openalex_key,
             max_results=args.max_results,
+            page_size=args.page_size,
             timeout=args.timeout,
         )
+        for page_number, page_articles, meta in pages:
+            total_count = meta.get("count")
+            if openalex_total_works is None and isinstance(total_count, int):
+                openalex_total_works = total_count
+                report["openalex_total_works"] = openalex_total_works
+                log(f"   OpenAlex total works: {format_count(openalex_total_works)}")
+            log(f"   Страница {page_number}: {len(page_articles)} работ")
+            articles.extend(page_articles)
     except ApiError as exc:
         log(f"   OpenAlex не ответил: {exc}")
-        articles = []
 
     if not articles:
         log("   OpenAlex не дал результатов, продолжу прямым поиском по запросу.")
@@ -725,13 +817,34 @@ def main() -> int:
 
         report["articles"].append(article_report)
 
+    downloaded = [item for item in report["articles"] if item.get("download")]
+    downloaded_count = len(downloaded)
+    processed_count = len(report["articles"])
+    downloaded_ratio = downloaded_count / openalex_total_works if openalex_total_works else None
+    processed_ratio = processed_count / openalex_total_works if openalex_total_works else None
+
+    report["processed_article_count"] = processed_count
+    report["processed_to_openalex_total_ratio"] = processed_ratio
+    report["downloaded_pdf_count"] = downloaded_count
+    report["downloaded_pdf_to_openalex_total_ratio"] = downloaded_ratio
+
+    log("")
+    log("Итоговое сравнение:")
+    log(f"   OpenAlex total works: {format_count(openalex_total_works)}")
+    log(f"   Обработано работ: {format_count(processed_count)} ({format_ratio(processed_count, openalex_total_works)})")
+    log(f"   Скачано PDF: {format_count(downloaded_count)}")
+    log(
+        "   PDF / OpenAlex total: "
+        f"{format_count(downloaded_count)} / {format_count(openalex_total_works)} "
+        f"({format_ratio(downloaded_count, openalex_total_works)})"
+    )
+    if openalex_total_works and processed_count < openalex_total_works:
+        log(f"   Ограничение: обработаны только первые {format_count(processed_count)} из-за --max-results={args.max_results}.")
+
     report_path = out_dir / "metadata_and_download_report.json"
     save_json(report_path, report)
     log("")
     log(f"Отчет сохранен: {report_path}")
-
-    downloaded = [item for item in report["articles"] if item.get("download")]
-    log(f"Скачано PDF: {len(downloaded)}")
     return 0 if downloaded or args.dry_run else 2
 
 
