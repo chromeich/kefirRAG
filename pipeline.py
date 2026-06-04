@@ -50,6 +50,8 @@ OPENALEX_SEARCH_PARAM = "search.title_and_abstract"
 DOI_INDEX_FILENAME = "doi_index.json"
 DOI_NUMBERS_FILENAME = "doi_numbers.txt"
 DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+EUROPE_PMC_RENDER_TIMEOUT_MULTIPLIER = 3
+EUROPE_PMC_RENDER_MIN_TIMEOUT = 120.0
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 SCI_BBAN_PDF_URL = "https://sci.bban.top/pdf/{doi}.pdf"
@@ -59,7 +61,11 @@ CORE_V3_SEARCH_URL = "https://api.core.ac.uk/v3/search/works/"
 CORE_V2_SEARCH_URL = "https://core.ac.uk/api-v2/articles/search/{query}"
 CORE_V2_DOWNLOAD_URL = "https://core.ac.uk/api-v2/articles/get/{core_id}/download/pdf"
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/125.0.0.0 Safari/537.36"
+)
 
 
 class ApiError(RuntimeError):
@@ -189,11 +195,27 @@ def redact_url(url: str) -> str:
     return re.sub(r"(?i)(apiKey|api_key|key|token)=([^&]+)", r"\1=<hidden>", url)
 
 
-def http_headers(accept: str = "application/json") -> dict[str, str]:
-    return {
+def http_headers(accept: str = "application/json", *, referer: str | None = None) -> dict[str, str]:
+    headers = {
         "Accept": accept,
         "User-Agent": USER_AGENT,
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "identity",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
     }
+    if referer:
+        headers["Referer"] = referer
+    if "pdf" in accept.lower():
+        headers.update(
+            {
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "same-origin" if referer else "none",
+            }
+        )
+    return headers
 
 
 def get_json(
@@ -598,6 +620,34 @@ def dedupe_candidates(candidates: list[PdfCandidate]) -> list[PdfCandidate]:
     return result
 
 
+def looks_like_anti_bot_challenge(body: str) -> bool:
+    lowered = body.lower()
+    markers = (
+        "just a moment",
+        "checking your browser",
+        "cloudflare",
+        "cf-browser-verification",
+        "cf-challenge",
+        "enable cookies",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def download_timeout_for(candidate: PdfCandidate, base_timeout: float) -> float:
+    if candidate.source == "EuropePMC":
+        parsed = urlsplit(candidate.url)
+        if "pdf=render" in parsed.query.lower() or "europepmc.org" in parsed.netloc.lower():
+            return max(base_timeout * EUROPE_PMC_RENDER_TIMEOUT_MULTIPLIER, EUROPE_PMC_RENDER_MIN_TIMEOUT)
+    return base_timeout
+
+
+def download_referer_for(candidate: PdfCandidate) -> str | None:
+    parsed = urlsplit(candidate.url)
+    if candidate.source == "EuropePMC" and "europepmc.org" in parsed.netloc.lower():
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    return None
+
+
 def download_pdf(
     candidate: PdfCandidate,
     *,
@@ -618,7 +668,13 @@ def download_pdf(
             "skipped": "already_exists",
         }
 
-    request = Request(requote_url(candidate.url), headers=http_headers(accept="application/pdf,*/*"))
+    request = Request(
+        requote_url(candidate.url),
+        headers=http_headers(
+            accept="application/pdf,application/octet-stream,*/*;q=0.8",
+            referer=download_referer_for(candidate),
+        ),
+    )
     temp_destination = destination.with_suffix(destination.suffix + ".part")
 
     try:
@@ -643,8 +699,11 @@ def download_pdf(
                     sha256.update(chunk)
                     total += len(chunk)
     except HTTPError as exc:
-        body = exc.read(300).decode("utf-8", errors="replace")
+        body = exc.read(700).decode("utf-8", errors="replace")
         temp_destination.unlink(missing_ok=True)
+        if exc.code in {403, 429} and looks_like_anti_bot_challenge(body):
+            raise DownloadError(f"HTTP {exc.code}: anti-bot challenge") from exc
+        body = re.sub(r"\s+", " ", body).strip()[:300]
         raise DownloadError(f"HTTP {exc.code}: {body}") from exc
     except URLError as exc:
         temp_destination.unlink(missing_ok=True)
@@ -1026,98 +1085,94 @@ def main() -> int:
             report["articles"].append(article_report)
             continue
 
-        candidate: PdfCandidate | None = None
-
-        log("2. SciBban: прямая ссылка по DOI...")
-        sci_bban_pdf_candidates = sci_bban_candidates(article)
-        if sci_bban_pdf_candidates:
-            candidate = sci_bban_pdf_candidates[0]
-            log("   SciBban: источник найден.")
-        else:
-            log("   SciBban пропущен: у статьи нет DOI.")
-
-        if candidate is None:
-            log("3. Unpaywall: ищу PDF...")
-            try:
-                unpaywall_pdf_candidates = unpaywall_candidates(article, email=args.email, timeout=args.timeout)
-                if unpaywall_pdf_candidates:
-                    candidate = unpaywall_pdf_candidates[0]
-                    log("   Unpaywall: источник найден.")
-            except ApiError as exc:
-                article_report["errors"].append({"source": "Unpaywall", "error": str(exc)})
-                log(f"   Unpaywall ошибка: {exc}")
-
-        if candidate is None:
-            log("4. Europe PMC: ищу OA копию...")
-            try:
-                europe_pmc_pdf_candidates = europe_pmc_candidates(
+        source_steps = (
+            ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
+            (
+                "3. Unpaywall: ищу PDF...",
+                "Unpaywall",
+                lambda: unpaywall_candidates(article, email=args.email, timeout=args.timeout),
+            ),
+            (
+                "4. Europe PMC: ищу OA копию...",
+                "EuropePMC",
+                lambda: europe_pmc_candidates(
                     article,
                     fallback_query=query,
                     email=args.email,
                     timeout=args.timeout,
-                )
-                if europe_pmc_pdf_candidates:
-                    candidate = europe_pmc_pdf_candidates[0]
-                    log("   Europe PMC: источник найден.")
-            except ApiError as exc:
-                article_report["errors"].append({"source": "EuropePMC", "error": str(exc)})
-                log(f"   Europe PMC ошибка: {exc}")
-
-        if candidate is None:
-            log("5. CORE: резервный поиск...")
-            try:
-                core_pdf_candidates = core_candidates(
+                ),
+            ),
+            (
+                "5. CORE: резервный поиск...",
+                "CORE",
+                lambda: core_candidates(
                     article,
                     fallback_query=query,
                     api_key=args.core_key,
                     email=args.email,
                     timeout=args.timeout,
-                )
-                if core_pdf_candidates:
-                    candidate = core_pdf_candidates[0]
-                    log("   CORE: источник найден.")
+                ),
+            ),
+            ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
+        )
+
+        download_step_logged = False
+        for step_message, source_name, find_candidates in source_steps:
+            log(step_message)
+            try:
+                source_candidates = dedupe_candidates(find_candidates())
             except ApiError as exc:
-                article_report["errors"].append({"source": "CORE", "error": str(exc)})
-                log(f"   CORE ошибка: {exc}")
+                article_report["errors"].append({"source": source_name, "error": str(exc)})
+                log(f"   {source_name} ошибка: {exc}")
+                continue
 
-        if candidate is None:
-            openalex_pdf_candidates_found = openalex_pdf_candidates(article)
-            if openalex_pdf_candidates_found:
-                candidate = openalex_pdf_candidates_found[0]
-                log("   OpenAlex: PDF URL из метаданных найден.")
+            if not source_candidates:
+                if source_name == "SciBban" and not article.doi:
+                    log("   SciBban пропущен: у статьи нет DOI.")
+                else:
+                    log(f"   {source_name}: источник не найден.")
+                continue
 
-        if candidate:
-            article_report["source"] = candidate.source
-            log(f"   Первый найденный источник: {candidate.source}")
-        else:
-            log("   PDF-источник не найден.")
+            log(f"   {source_name}: источников найдено: {len(source_candidates)}")
 
-        if args.dry_run:
-            log("6. Скачать PDF: dry-run, пропускаю загрузку.")
-            report["articles"].append(article_report)
-            continue
+            if args.dry_run:
+                candidate = source_candidates[0]
+                article_report["source"] = candidate.source
+                log(f"   Первый найденный источник: {candidate.source}")
+                break
 
-        log("6. Скачать PDF...")
-        if candidate:
-            candidate_doi = candidate.doi or article.doi
-            candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi, repo_root)
-            if candidate_duplicate:
-                skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
-                duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
-                article_report["duplicate"] = duplicate_info
-                duplicate_articles.append(duplicate_info)
-                log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
-            else:
+            if not download_step_logged:
+                log("Скачать PDF...")
+                download_step_logged = True
+
+            source_finished = False
+            for candidate in source_candidates:
+                candidate_doi = candidate.doi or article.doi
+                candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi, repo_root)
+                if candidate_duplicate:
+                    skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
+                    duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
+                    article_report["source"] = candidate_duplicate.get("source") or candidate.source
+                    article_report["duplicate"] = duplicate_info
+                    duplicate_articles.append(duplicate_info)
+                    log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
+                    source_finished = True
+                    break
+
+                candidate_timeout = download_timeout_for(candidate, args.timeout)
                 log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
+                if candidate_timeout != args.timeout:
+                    log(f"   Timeout для {candidate.source}: {candidate_timeout:g}s")
                 try:
                     download_result = download_pdf(
                         candidate,
                         out_dir=out_dir,
                         repo_root=repo_root,
                         email=args.email,
-                        timeout=args.timeout,
+                        timeout=candidate_timeout,
                         overwrite=args.overwrite,
                     )
+                    article_report["source"] = download_result.get("source")
                     article_report["download"] = download_result
                     if register_doi_entry(
                         doi_index,
@@ -1131,11 +1186,23 @@ def main() -> int:
                     ):
                         save_doi_files(base_out_dir, doi_index, repo_root)
                     log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
+                    source_finished = True
+                    break
                 except DownloadError as exc:
-                    message = f"{candidate.source}: {exc}"
-                    article_report["errors"].append({"source": candidate.source, "error": str(exc)})
-                    log(f"   Не получилось: {message}")
+                    error = str(exc)
+                    article_report["errors"].append({"source": candidate.source, "error": error})
+                    log(f"   Не получилось: {candidate.source}: {error}")
                     time.sleep(0.5)
+
+            if source_finished:
+                break
+
+            log(f"   {source_name}: рабочий PDF не найден, перехожу к следующему источнику.")
+
+        if args.dry_run:
+            log("6. Скачать PDF: dry-run, пропускаю загрузку.")
+            report["articles"].append(article_report)
+            continue
 
         if not article_report["download"] and not article_report["duplicate"]:
             log("   PDF не скачан для этой работы.")
