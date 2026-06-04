@@ -4,13 +4,14 @@ Search open-access article PDFs by title/query and download them next to this fi
 
 Pipeline:
 1. OpenAlex   -> metadata and DOI candidates
+2. SciBban    -> direct PDF URL by DOI
 3. Unpaywall  -> OA PDF by DOI
 4. Europe PMC -> OA PDF/full-text copies
 5. CORE       -> fallback OA search
 6. Download PDF files
 
 Examples:
-    python3 download_oa_articles.py \
+    python3 download_articles_pipeline.py \
         "Active chitosan/PVA films with anthocyanins from Brassica oleraceae" \
         --out-dir ./my_pdfs \
         --page-size 25 \
@@ -48,8 +49,10 @@ DEFAULT_PAGE_SIZE = 100
 OPENALEX_SEARCH_PARAM = "search.title_and_abstract"
 DOI_INDEX_FILENAME = "doi_index.json"
 DOI_NUMBERS_FILENAME = "doi_numbers.txt"
+DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
+SCI_BBAN_PDF_URL = "https://sci.bban.top/pdf/{doi}.pdf"
 UNPAYWALL_DOI_URL = "https://api.unpaywall.org/v2/{doi}"
 EUROPE_PMC_SEARCH_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 CORE_V3_SEARCH_URL = "https://api.core.ac.uk/v3/search/works/"
@@ -102,6 +105,15 @@ def clean_doi(value: str | None) -> str | None:
     value = re.sub(r"^doi:\s*", "", value, flags=re.I)
     value = value.strip().strip(".")
     return value or None
+
+
+def extract_doi(value: str | None) -> str | None:
+    if not value:
+        return None
+    match = DOI_PATTERN.search(value)
+    if not match:
+        return None
+    return clean_doi(match.group(0).rstrip(".,;"))
 
 
 def safe_filename(title: str, doi: str | None = None, suffix: str = ".pdf") -> str:
@@ -307,6 +319,20 @@ def openalex_pdf_candidates(article: Article) -> list[PdfCandidate]:
             )
         )
     return candidates
+
+
+def sci_bban_candidates(article: Article) -> list[PdfCandidate]:
+    if not article.doi:
+        return []
+    return [
+        PdfCandidate(
+            url=SCI_BBAN_PDF_URL.format(doi=quote(article.doi, safe="/")),
+            source="SciBban",
+            article_title=article.title,
+            doi=article.doi,
+            note="direct DOI PDF endpoint",
+        )
+    ]
 
 
 def unpaywall_candidates(
@@ -779,7 +805,7 @@ def openalex_page_size(value: str) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Find OA article PDFs through OpenAlex, Unpaywall, Europe PMC and CORE.",
+        description="Find OA article PDFs through OpenAlex, SciBban, Unpaywall, Europe PMC and CORE.",
     )
     parser.add_argument(
         "query",
@@ -811,7 +837,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-results",
         type=positive_int,
-        default=5,
+        default=100,
         help="Total max OpenAlex works to process.",
     )
     parser.add_argument(
@@ -902,7 +928,10 @@ def main() -> int:
 
     if not articles:
         log("   OpenAlex не дал результатов, продолжу прямым поиском по запросу.")
-        articles = [Article(title=query)]
+        query_doi = extract_doi(query)
+        if query_doi:
+            log(f"   DOI из запроса: {query_doi}")
+        articles = [Article(title=query, doi=query_doi)]
     else:
         log(f"   Найдено работ: {len(articles)}")
 
@@ -931,6 +960,14 @@ def main() -> int:
             continue
 
         candidates: list[PdfCandidate] = []
+
+        log("2. SciBban: прямая ссылка по DOI...")
+        sci_bban_pdf_candidates = sci_bban_candidates(article)
+        candidates.extend(sci_bban_pdf_candidates)
+        if article.doi:
+            log(f"   SciBban кандидатов: {len(sci_bban_pdf_candidates)}")
+        else:
+            log("   SciBban пропущен: у статьи нет DOI.")
 
         log("3. Unpaywall: ищу PDF...")
         try:
