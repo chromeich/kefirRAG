@@ -137,6 +137,47 @@ def safe_dirname(value: str, max_length: int = 140) -> str:
     return base[:max_length].rstrip("._-") or "query"
 
 
+def repo_relative_path(path_value: str | Path | None, repo_root: Path) -> str | None:
+    if not path_value:
+        return None
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = repo_root / path
+    path = path.resolve()
+    try:
+        relative = path.relative_to(repo_root)
+    except ValueError:
+        relative = Path(os.path.relpath(path, repo_root))
+    return relative.as_posix()
+
+
+def resolve_stored_path(
+    path_value: str | Path | None,
+    *,
+    repo_root: Path,
+    report_path: Path | None = None,
+) -> Path | None:
+    if not path_value:
+        return None
+    path = Path(path_value)
+    if path.is_absolute():
+        return path.resolve()
+
+    repo_candidate = (repo_root / path).resolve()
+    if repo_candidate.exists() or not report_path:
+        return repo_candidate
+
+    report_candidate = (report_path.parent / path).resolve()
+    if report_candidate.exists():
+        return report_candidate
+    return repo_candidate
+
+
+def stored_path_exists(path_value: str | Path | None, repo_root: Path) -> bool:
+    path = resolve_stored_path(path_value, repo_root=repo_root)
+    return bool(path and path.exists())
+
+
 def requote_url(url: str) -> str:
     parts = urlsplit(url.strip())
     path = quote(parts.path, safe="/:%")
@@ -231,6 +272,12 @@ def build_openalex_articles(items: list[dict[str, Any]], fallback_title: str) ->
             )
         )
     return articles
+
+
+def article_metadata(article: Article) -> dict[str, Any]:
+    data = asdict(article)
+    data.pop("raw", None)
+    return data
 
 
 def openalex_search_pages(
@@ -555,6 +602,7 @@ def download_pdf(
     candidate: PdfCandidate,
     *,
     out_dir: Path,
+    repo_root: Path,
     email: str | None,
     timeout: float,
     overwrite: bool,
@@ -564,10 +612,9 @@ def download_pdf(
     if destination.exists() and not overwrite:
         return {
             "ok": True,
-            "path": str(destination),
+            "path": repo_relative_path(destination, repo_root),
             "bytes": destination.stat().st_size,
             "source": candidate.source,
-            "url": redact_url(candidate.url),
             "skipped": "already_exists",
         }
 
@@ -609,11 +656,10 @@ def download_pdf(
     temp_destination.replace(destination)
     return {
         "ok": True,
-        "path": str(destination),
+        "path": repo_relative_path(destination, repo_root),
         "bytes": total,
         "sha256": sha256.hexdigest(),
         "source": candidate.source,
-        "url": redact_url(candidate.url),
     }
 
 
@@ -659,13 +705,25 @@ def load_doi_index(path: Path) -> dict[str, Any]:
     return empty_doi_index()
 
 
-def normalize_saved_path(path_value: str | None, *, report_path: Path | None = None) -> str | None:
-    if not path_value:
+def normalize_saved_path(
+    path_value: str | None,
+    *,
+    repo_root: Path,
+    report_path: Path | None = None,
+) -> str | None:
+    path = resolve_stored_path(path_value, repo_root=repo_root, report_path=report_path)
+    if not path:
         return None
-    path = Path(path_value)
-    if not path.is_absolute() and report_path:
-        path = report_path.parent / path
-    return str(path.resolve())
+    return repo_relative_path(path, repo_root)
+
+
+def normalize_index_paths(index: dict[str, Any], repo_root: Path) -> None:
+    for entry in index.get("items", {}).values():
+        entries = [entry, *(entry.get("duplicate_paths") or [])]
+        for item in entries:
+            for key in ("path", "report_path"):
+                if item.get(key):
+                    item[key] = normalize_saved_path(item[key], repo_root=repo_root)
 
 
 def register_doi_entry(
@@ -706,7 +764,7 @@ def register_doi_entry(
     return False
 
 
-def find_doi_duplicate(index: dict[str, Any], doi: str | None) -> dict[str, Any] | None:
+def find_doi_duplicate(index: dict[str, Any], doi: str | None, repo_root: Path) -> dict[str, Any] | None:
     key = doi_key(doi)
     if not key:
         return None
@@ -718,12 +776,12 @@ def find_doi_duplicate(index: dict[str, Any], doi: str | None) -> dict[str, Any]
     entries = [entry, *(entry.get("duplicate_paths") or [])]
     for item in entries:
         path = item.get("path")
-        if not path or Path(path).exists():
+        if not path or stored_path_exists(path, repo_root):
             return item
     return None
 
 
-def bootstrap_doi_index_from_reports(base_out_dir: Path, index: dict[str, Any]) -> int:
+def bootstrap_doi_index_from_reports(base_out_dir: Path, index: dict[str, Any], repo_root: Path) -> int:
     added = 0
     if not base_out_dir.exists():
         return added
@@ -741,7 +799,7 @@ def bootstrap_doi_index_from_reports(base_out_dir: Path, index: dict[str, Any]) 
             if not download:
                 continue
 
-            path = normalize_saved_path(download.get("path"), report_path=report_path)
+            path = normalize_saved_path(download.get("path"), repo_root=repo_root, report_path=report_path)
             if register_doi_entry(
                 index,
                 doi=article.get("doi"),
@@ -750,14 +808,15 @@ def bootstrap_doi_index_from_reports(base_out_dir: Path, index: dict[str, Any]) 
                 query=query,
                 source=download.get("source"),
                 bytes_count=download.get("bytes"),
-                report_path=str(report_path.resolve()),
+                report_path=repo_relative_path(report_path, repo_root),
             ):
                 added += 1
     return added
 
 
-def save_doi_files(base_out_dir: Path, index: dict[str, Any]) -> tuple[Path, Path]:
+def save_doi_files(base_out_dir: Path, index: dict[str, Any], repo_root: Path) -> tuple[Path, Path]:
     index["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    normalize_index_paths(index, repo_root)
     index_path = base_out_dir / DOI_INDEX_FILENAME
     numbers_path = base_out_dir / DOI_NUMBERS_FILENAME
     save_json(index_path, index)
@@ -776,13 +835,19 @@ def duplicate_log_message(doi: str | None, existing: dict[str, Any], skipped_pat
     return f"   Дубликат DOI {clean_doi(doi)}: уже есть файл {existing_path}; пропускаю {skipped_path}"
 
 
-def duplicate_report_entry(doi: str | None, existing: dict[str, Any], skipped_path: Path) -> dict[str, Any]:
+def duplicate_report_entry(
+    doi: str | None,
+    existing: dict[str, Any],
+    skipped_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
     return {
         "doi": clean_doi(doi),
-        "existing_path": existing.get("path"),
+        "existing_path": normalize_saved_path(existing.get("path"), repo_root=repo_root),
         "existing_title": existing.get("title"),
         "existing_query": existing.get("query"),
-        "skipped_path": str(skipped_path),
+        "existing_source": existing.get("source"),
+        "skipped_path": repo_relative_path(skipped_path, repo_root),
     }
 
 
@@ -868,27 +933,28 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     query = normalize_text(args.query)
-    script_dir = Path(__file__).resolve().parent
-    base_out_dir = args.out_dir.resolve() if args.out_dir else script_dir / "downloaded_pdfs"
+    repo_root = Path(__file__).resolve().parent
+    base_out_dir = args.out_dir.resolve() if args.out_dir else repo_root / "downloaded_pdfs"
     query_dir_name = safe_dirname(query)
     out_dir = base_out_dir / query_dir_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     doi_index_path = base_out_dir / DOI_INDEX_FILENAME
     doi_index = load_doi_index(doi_index_path)
-    bootstrapped_dois = bootstrap_doi_index_from_reports(base_out_dir, doi_index)
-    doi_index_path, doi_numbers_path = save_doi_files(base_out_dir, doi_index)
+    normalize_index_paths(doi_index, repo_root)
+    bootstrapped_dois = bootstrap_doi_index_from_reports(base_out_dir, doi_index, repo_root)
+    doi_index_path, doi_numbers_path = save_doi_files(base_out_dir, doi_index, repo_root)
     duplicate_articles: list[dict[str, Any]] = []
 
     report: dict[str, Any] = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "query": args.query,
         "normalized_query": query,
-        "base_out_dir": str(base_out_dir),
+        "base_out_dir": repo_relative_path(base_out_dir, repo_root),
         "query_dir_name": query_dir_name,
-        "out_dir": str(out_dir),
-        "doi_index_path": str(doi_index_path),
-        "doi_numbers_path": str(doi_numbers_path),
+        "out_dir": repo_relative_path(out_dir, repo_root),
+        "doi_index_path": repo_relative_path(doi_index_path, repo_root),
+        "doi_numbers_path": repo_relative_path(doi_numbers_path, repo_root),
         "openalex_search_param": OPENALEX_SEARCH_PARAM,
         "openalex_total_works": None,
         "openalex_max_results": args.max_results,
@@ -942,76 +1008,89 @@ def main() -> int:
             log(f"   DOI: {article.doi}")
 
         article_report: dict[str, Any] = {
-            "article": asdict(article),
-            "candidates": [],
+            "article": article_metadata(article),
+            "source": None,
             "download": None,
             "duplicate": None,
             "errors": [],
         }
 
-        article_duplicate = find_doi_duplicate(doi_index, article.doi)
+        article_duplicate = find_doi_duplicate(doi_index, article.doi, repo_root)
         if article_duplicate:
             skipped_path = out_dir / safe_filename(article.title, article.doi)
-            duplicate_info = duplicate_report_entry(article.doi, article_duplicate, skipped_path)
+            duplicate_info = duplicate_report_entry(article.doi, article_duplicate, skipped_path, repo_root)
+            article_report["source"] = article_duplicate.get("source")
             article_report["duplicate"] = duplicate_info
             duplicate_articles.append(duplicate_info)
             log(duplicate_log_message(article.doi, article_duplicate, skipped_path))
             report["articles"].append(article_report)
             continue
 
-        candidates: list[PdfCandidate] = []
+        candidate: PdfCandidate | None = None
 
         log("2. SciBban: прямая ссылка по DOI...")
         sci_bban_pdf_candidates = sci_bban_candidates(article)
-        candidates.extend(sci_bban_pdf_candidates)
-        if article.doi:
-            log(f"   SciBban кандидатов: {len(sci_bban_pdf_candidates)}")
+        if sci_bban_pdf_candidates:
+            candidate = sci_bban_pdf_candidates[0]
+            log("   SciBban: источник найден.")
         else:
             log("   SciBban пропущен: у статьи нет DOI.")
 
-        log("3. Unpaywall: ищу PDF...")
-        try:
-            candidates.extend(unpaywall_candidates(article, email=args.email, timeout=args.timeout))
-        except ApiError as exc:
-            article_report["errors"].append({"source": "Unpaywall", "error": str(exc)})
-            log(f"   Unpaywall ошибка: {exc}")
+        if candidate is None:
+            log("3. Unpaywall: ищу PDF...")
+            try:
+                unpaywall_pdf_candidates = unpaywall_candidates(article, email=args.email, timeout=args.timeout)
+                if unpaywall_pdf_candidates:
+                    candidate = unpaywall_pdf_candidates[0]
+                    log("   Unpaywall: источник найден.")
+            except ApiError as exc:
+                article_report["errors"].append({"source": "Unpaywall", "error": str(exc)})
+                log(f"   Unpaywall ошибка: {exc}")
 
-        log("4. Europe PMC: ищу OA копию...")
-        try:
-            candidates.extend(
-                europe_pmc_candidates(
+        if candidate is None:
+            log("4. Europe PMC: ищу OA копию...")
+            try:
+                europe_pmc_pdf_candidates = europe_pmc_candidates(
                     article,
                     fallback_query=query,
                     email=args.email,
                     timeout=args.timeout,
                 )
-            )
-        except ApiError as exc:
-            article_report["errors"].append({"source": "EuropePMC", "error": str(exc)})
-            log(f"   Europe PMC ошибка: {exc}")
+                if europe_pmc_pdf_candidates:
+                    candidate = europe_pmc_pdf_candidates[0]
+                    log("   Europe PMC: источник найден.")
+            except ApiError as exc:
+                article_report["errors"].append({"source": "EuropePMC", "error": str(exc)})
+                log(f"   Europe PMC ошибка: {exc}")
 
-        log("5. CORE: резервный поиск...")
-        try:
-            candidates.extend(
-                core_candidates(
+        if candidate is None:
+            log("5. CORE: резервный поиск...")
+            try:
+                core_pdf_candidates = core_candidates(
                     article,
                     fallback_query=query,
                     api_key=args.core_key,
                     email=args.email,
                     timeout=args.timeout,
                 )
-            )
-        except ApiError as exc:
-            article_report["errors"].append({"source": "CORE", "error": str(exc)})
-            log(f"   CORE ошибка: {exc}")
+                if core_pdf_candidates:
+                    candidate = core_pdf_candidates[0]
+                    log("   CORE: источник найден.")
+            except ApiError as exc:
+                article_report["errors"].append({"source": "CORE", "error": str(exc)})
+                log(f"   CORE ошибка: {exc}")
 
-        # OpenAlex often already contains a best_oa_location PDF URL; use it after
-        # the requested sources so the planned order stays intact.
-        candidates.extend(openalex_pdf_candidates(article))
-        candidates = dedupe_candidates(candidates)
+        if candidate is None:
+            openalex_pdf_candidates_found = openalex_pdf_candidates(article)
+            if openalex_pdf_candidates_found:
+                candidate = openalex_pdf_candidates_found[0]
+                log("   OpenAlex: PDF URL из метаданных найден.")
 
-        article_report["candidates"] = [asdict(candidate) for candidate in candidates]
-        log(f"   PDF-кандидатов: {len(candidates)}")
+        if candidate:
+            article_report["source"] = candidate.source
+            log(f"   Первый найденный источник: {candidate.source}")
+        else:
+            log("   PDF-источник не найден.")
 
         if args.dry_run:
             log("6. Скачать PDF: dry-run, пропускаю загрузку.")
@@ -1019,45 +1098,44 @@ def main() -> int:
             continue
 
         log("6. Скачать PDF...")
-        for candidate in candidates:
+        if candidate:
             candidate_doi = candidate.doi or article.doi
-            candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi)
+            candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi, repo_root)
             if candidate_duplicate:
                 skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
-                duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path)
+                duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
                 article_report["duplicate"] = duplicate_info
                 duplicate_articles.append(duplicate_info)
                 log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
-                break
-
-            try:
+            else:
                 log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
-                download_result = download_pdf(
-                    candidate,
-                    out_dir=out_dir,
-                    email=args.email,
-                    timeout=args.timeout,
-                    overwrite=args.overwrite,
-                )
-                article_report["download"] = download_result
-                if register_doi_entry(
-                    doi_index,
-                    doi=candidate_doi,
-                    path=normalize_saved_path(download_result.get("path")),
-                    title=article.title,
-                    query=query,
-                    source=download_result.get("source"),
-                    bytes_count=download_result.get("bytes"),
-                    report_path=None,
-                ):
-                    save_doi_files(base_out_dir, doi_index)
-                log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
-                break
-            except DownloadError as exc:
-                message = f"{candidate.source}: {exc}"
-                article_report["errors"].append({"source": candidate.source, "error": str(exc)})
-                log(f"   Не получилось: {message}")
-                time.sleep(0.5)
+                try:
+                    download_result = download_pdf(
+                        candidate,
+                        out_dir=out_dir,
+                        repo_root=repo_root,
+                        email=args.email,
+                        timeout=args.timeout,
+                        overwrite=args.overwrite,
+                    )
+                    article_report["download"] = download_result
+                    if register_doi_entry(
+                        doi_index,
+                        doi=candidate_doi,
+                        path=download_result.get("path"),
+                        title=article.title,
+                        query=query,
+                        source=download_result.get("source"),
+                        bytes_count=download_result.get("bytes"),
+                        report_path=None,
+                    ):
+                        save_doi_files(base_out_dir, doi_index, repo_root)
+                    log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
+                except DownloadError as exc:
+                    message = f"{candidate.source}: {exc}"
+                    article_report["errors"].append({"source": candidate.source, "error": str(exc)})
+                    log(f"   Не получилось: {message}")
+                    time.sleep(0.5)
 
         if not article_report["download"] and not article_report["duplicate"]:
             log("   PDF не скачан для этой работы.")
@@ -1085,7 +1163,7 @@ def main() -> int:
     report["duplicate_doi_count"] = duplicate_count
 
     log("")
-    log("Итоговое сравнение:")
+    log("Результаты:")
     log(f"   OpenAlex total works: {format_count(openalex_total_works)}")
     log(f"   Обработано работ: {format_count(processed_count)} ({format_ratio(processed_count, openalex_total_works)})")
     log(f"   Новых PDF скачано: {format_count(downloaded_count)}")
@@ -1109,7 +1187,7 @@ def main() -> int:
     save_json(report_path, report)
     log("")
     log(f"Отчет сохранен: {report_path}")
-    save_doi_files(base_out_dir, doi_index)
+    save_doi_files(base_out_dir, doi_index, repo_root)
     return 0 if downloaded or duplicate_articles or args.dry_run else 2
 
 
