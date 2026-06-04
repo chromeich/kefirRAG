@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -37,10 +38,11 @@ import time
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterator
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
@@ -52,6 +54,9 @@ DOI_NUMBERS_FILENAME = "doi_numbers.txt"
 DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
 EUROPE_PMC_RENDER_TIMEOUT_MULTIPLIER = 3
 EUROPE_PMC_RENDER_MIN_TIMEOUT = 120.0
+OJS_DOWNLOAD_TIMEOUT_MULTIPLIER = 4
+OJS_DOWNLOAD_MIN_TIMEOUT = 180.0
+MAX_HTML_DOWNLOAD_FOLLOWS = 3
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 SCI_BBAN_PDF_URL = "https://sci.bban.top/pdf/{doi}.pdf"
@@ -633,8 +638,32 @@ def looks_like_anti_bot_challenge(body: str) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def is_ojs_download_url(url: str) -> bool:
+    return "/article/download/" in urlsplit(url).path.lower()
+
+
+def ojs_article_referer(url: str) -> str | None:
+    parsed = urlsplit(url)
+    path = parsed.path
+    marker = "/article/download/"
+    lower_path = path.lower()
+    marker_index = lower_path.find(marker)
+    if marker_index < 0:
+        return None
+
+    prefix = path[:marker_index]
+    rest = path[marker_index + len(marker) :]
+    article_id = rest.split("/", 1)[0]
+    if not article_id:
+        return None
+    return urlunsplit((parsed.scheme, parsed.netloc, f"{prefix}/article/view/{article_id}", "", ""))
+
+
 def download_timeout_for(candidate: PdfCandidate, base_timeout: float) -> float:
-    if candidate.source == "EuropePMC":
+    source = candidate.source.lower()
+    if is_ojs_download_url(candidate.url):
+        return max(base_timeout * OJS_DOWNLOAD_TIMEOUT_MULTIPLIER, OJS_DOWNLOAD_MIN_TIMEOUT)
+    if source in {"europepmc", "unpaywall"}:
         parsed = urlsplit(candidate.url)
         if "pdf=render" in parsed.query.lower() or "europepmc.org" in parsed.netloc.lower():
             return max(base_timeout * EUROPE_PMC_RENDER_TIMEOUT_MULTIPLIER, EUROPE_PMC_RENDER_MIN_TIMEOUT)
@@ -643,9 +672,67 @@ def download_timeout_for(candidate: PdfCandidate, base_timeout: float) -> float:
 
 def download_referer_for(candidate: PdfCandidate) -> str | None:
     parsed = urlsplit(candidate.url)
-    if candidate.source == "EuropePMC" and "europepmc.org" in parsed.netloc.lower():
+    source = candidate.source.lower()
+    if is_ojs_download_url(candidate.url):
+        return ojs_article_referer(candidate.url)
+    if source == "europepmc" and "europepmc.org" in parsed.netloc.lower():
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    if source == "unpaywall" and "unpaywall.org" in parsed.netloc.lower():
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
     return None
+
+
+class DownloadLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = {key.lower(): value or "" for key, value in attrs}
+        if tag in {"a", "link"} and values.get("href"):
+            self.links.append((values["href"], " ".join(values.values())))
+        elif tag in {"iframe", "embed", "source"} and values.get("src"):
+            self.links.append((values["src"], " ".join(values.values())))
+        elif tag == "form" and values.get("action"):
+            self.links.append((values["action"], " ".join(values.values())))
+
+
+def download_link_score(url: str, context: str) -> int:
+    text = f"{url} {context}".lower()
+    score = 0
+    if "download" in text:
+        score += 60
+    if "pdf" in text:
+        score += 40
+    if "/article/download/" in text:
+        score += 30
+    if "view" in text:
+        score -= 10
+    if url.startswith("#") or url.startswith("mailto:") or url.startswith("javascript:"):
+        score -= 100
+    return score
+
+
+def html_download_links(html: str, base_url: str) -> list[str]:
+    parser = DownloadLinkParser()
+    parser.feed(html)
+    scored: list[tuple[int, str]] = []
+    for href, context in parser.links:
+        absolute_url = urljoin(base_url, href.strip())
+        score = download_link_score(absolute_url, context)
+        if score <= 0:
+            continue
+        scored.append((score, absolute_url))
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for _, url in sorted(scored, key=lambda item: item[0], reverse=True):
+        key = requote_url(url)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(url)
+    return result
 
 
 def download_pdf(
@@ -668,49 +755,89 @@ def download_pdf(
             "skipped": "already_exists",
         }
 
-    request = Request(
-        requote_url(candidate.url),
-        headers=http_headers(
-            accept="application/pdf,application/octet-stream,*/*;q=0.8",
-            referer=download_referer_for(candidate),
-        ),
-    )
     temp_destination = destination.with_suffix(destination.suffix + ".part")
+    current_url = candidate.url
+    current_referer = download_referer_for(candidate)
+    visited_urls: set[str] = set()
 
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            content_type = response.headers.get("Content-Type", "").lower()
-            first_chunk = response.read(8192)
-            has_pdf_magic = b"%PDF-" in first_chunk[:2048]
-            if not has_pdf_magic and "pdf" not in content_type and not looks_like_pdf_url(candidate.url):
-                raise DownloadError(f"response is not a PDF, Content-Type={content_type!r}")
+    for follow_number in range(MAX_HTML_DOWNLOAD_FOLLOWS + 1):
+        url_key = requote_url(current_url)
+        if url_key in visited_urls:
+            raise DownloadError(f"HTML download link loop at {redact_url(current_url)}")
+        visited_urls.add(url_key)
 
-            sha256 = hashlib.sha256()
-            total = 0
-            with temp_destination.open("wb") as file:
-                file.write(first_chunk)
-                sha256.update(first_chunk)
-                total += len(first_chunk)
-                while True:
-                    chunk = response.read(1024 * 128)
-                    if not chunk:
-                        break
-                    file.write(chunk)
-                    sha256.update(chunk)
-                    total += len(chunk)
-    except HTTPError as exc:
-        body = exc.read(700).decode("utf-8", errors="replace")
-        temp_destination.unlink(missing_ok=True)
-        if exc.code in {403, 429} and looks_like_anti_bot_challenge(body):
-            raise DownloadError(f"HTTP {exc.code}: anti-bot challenge") from exc
-        body = re.sub(r"\s+", " ", body).strip()[:300]
-        raise DownloadError(f"HTTP {exc.code}: {body}") from exc
-    except URLError as exc:
-        temp_destination.unlink(missing_ok=True)
-        raise DownloadError(f"network error: {exc.reason}") from exc
-    except Exception:
-        temp_destination.unlink(missing_ok=True)
-        raise
+        request = Request(
+            url_key,
+            headers=http_headers(
+                accept="application/pdf,application/octet-stream,text/html,*/*;q=0.8",
+                referer=current_referer,
+            ),
+        )
+
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                content_type = response.headers.get("Content-Type", "").lower()
+                response_url = response.geturl() or current_url
+                first_chunk = response.read(8192)
+                first_nonspace = first_chunk.lstrip()[:32].lower()
+                has_pdf_magic = b"%PDF-" in first_chunk[:2048]
+                looks_like_html = "html" in content_type or first_nonspace.startswith((b"<!doctype", b"<html"))
+
+                if not has_pdf_magic and looks_like_html:
+                    html = first_chunk + response.read(1024 * 1024)
+                    html_text = html.decode("utf-8", errors="replace")
+                    links = html_download_links(html_text, response_url)
+                    if not links:
+                        raise DownloadError(f"response is HTML without a PDF/download link, Content-Type={content_type!r}")
+                    if follow_number >= MAX_HTML_DOWNLOAD_FOLLOWS:
+                        raise DownloadError("too many HTML download link follows")
+                    current_referer = response_url
+                    current_url = links[0]
+                    continue
+
+                if not has_pdf_magic and "pdf" not in content_type and not looks_like_pdf_url(current_url):
+                    raise DownloadError(f"response is not a PDF, Content-Type={content_type!r}")
+
+                sha256 = hashlib.sha256()
+                total = 0
+                with temp_destination.open("wb") as file:
+                    file.write(first_chunk)
+                    sha256.update(first_chunk)
+                    total += len(first_chunk)
+                    while True:
+                        chunk = response.read(1024 * 128)
+                        if not chunk:
+                            break
+                        file.write(chunk)
+                        sha256.update(chunk)
+                        total += len(chunk)
+                break
+        except HTTPError as exc:
+            body = exc.read(700).decode("utf-8", errors="replace")
+            temp_destination.unlink(missing_ok=True)
+            if exc.code in {403, 429} and looks_like_anti_bot_challenge(body):
+                raise DownloadError(f"HTTP {exc.code}: anti-bot challenge") from exc
+            body = re.sub(r"\s+", " ", body).strip()[:300]
+            raise DownloadError(f"HTTP {exc.code}: {body}") from exc
+        except URLError as exc:
+            temp_destination.unlink(missing_ok=True)
+            raise DownloadError(f"network error: {exc.reason}") from exc
+        except TimeoutError as exc:
+            temp_destination.unlink(missing_ok=True)
+            raise DownloadError(f"timeout after {timeout:g}s") from exc
+        except (
+            http.client.RemoteDisconnected,
+            http.client.BadStatusLine,
+            http.client.IncompleteRead,
+            ConnectionError,
+        ) as exc:
+            temp_destination.unlink(missing_ok=True)
+            raise DownloadError(f"connection closed: {exc}") from exc
+        except Exception:
+            temp_destination.unlink(missing_ok=True)
+            raise
+    else:
+        raise DownloadError("too many HTML download link follows")
 
     temp_destination.replace(destination)
     return {
@@ -1200,7 +1327,7 @@ def main() -> int:
             log(f"   {source_name}: рабочий PDF не найден, перехожу к следующему источнику.")
 
         if args.dry_run:
-            log("6. Скачать PDF: dry-run, пропускаю загрузку.")
+            log("Скачать PDF: dry-run, пропускаю загрузку.")
             report["articles"].append(article_report)
             continue
 
