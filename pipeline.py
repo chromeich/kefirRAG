@@ -33,6 +33,7 @@ import http.client
 import json
 import os
 import re
+import signal
 import sys
 import time
 import unicodedata
@@ -422,9 +423,20 @@ def openalex_pdf_candidates(article: Article) -> list[PdfCandidate]:
 def sci_bban_candidates(article: Article) -> list[PdfCandidate]:
     if not article.doi:
         return []
+    url = SCI_BBAN_PDF_URL.format(doi=quote(article.doi, safe="/"))
+    try:
+        request = Request(url, method="HEAD", headers=http_headers(accept="application/pdf"))
+        with urlopen(request, timeout=10) as response:
+            if response.getcode() == 404:
+                return []
+    except HTTPError as exc:
+        if exc.code == 404:
+            return []
+    except (URLError, TimeoutError, ConnectionError, OSError):
+        pass
     return [
         PdfCandidate(
-            url=SCI_BBAN_PDF_URL.format(doi=quote(article.doi, safe="/")),
+            url=url,
             source="SciBban",
             article_title=article.title,
             doi=article.doi,
@@ -1148,7 +1160,7 @@ def main() -> int:
     query_dir_name = safe_dirname(query)
     out_dir = base_out_dir / query_dir_name
     out_dir.mkdir(parents=True, exist_ok=True)
-
+    report_path = out_dir / "metadata_and_download_report.json"
     doi_index_path = base_out_dir / DOI_INDEX_FILENAME
     doi_index = load_doi_index(doi_index_path)
     normalize_index_paths(doi_index, repo_root)
@@ -1211,154 +1223,175 @@ def main() -> int:
     else:
         log(f"   Найдено работ: {len(articles)}")
 
-    for index, article in enumerate(articles, start=1):
+    interrupted = False
+    def _on_sigint(signum, frame):
+        nonlocal interrupted
+        interrupted = True
         log("")
-        log(f"[{index}/{len(articles)}] {article.title}")
-        if article.doi:
-            log(f"   DOI: {article.doi}")
+        log("Получен SIGINT (Ctrl+C), завершаю и сохраняю прогресс...")
 
-        article_report: dict[str, Any] = {
-            "article": article_metadata(article),
-            "source": None,
-            "download": None,
-            "duplicate": None,
-            "errors": [],
-        }
+    import signal
+    old_handler = signal.signal(signal.SIGINT, _on_sigint)
 
-        article_duplicate = find_doi_duplicate(doi_index, article.doi, repo_root)
-        if article_duplicate:
-            skipped_path = out_dir / safe_filename(article.title, article.doi)
-            duplicate_info = duplicate_report_entry(article.doi, article_duplicate, skipped_path, repo_root)
-            article_report["source"] = article_duplicate.get("source")
-            article_report["duplicate"] = duplicate_info
-            duplicate_articles.append(duplicate_info)
-            log(duplicate_log_message(article.doi, article_duplicate, skipped_path))
-            report["articles"].append(article_report)
-            continue
+    try:
+        for index, article in enumerate(articles, start=1):
+            if interrupted:
+                break
+            log("")
+            log(f"[{index}/{len(articles)}] {article.title}")
+            if article.doi:
+                log(f"   DOI: {article.doi}")
 
-        source_steps = (
-            ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
-            (
-                "3. Unpaywall: ищу PDF...",
-                "Unpaywall",
-                lambda: unpaywall_candidates(article, email=args.email, timeout=args.timeout),
-            ),
-            (
-                "4. Europe PMC: ищу OA копию...",
-                "EuropePMC",
-                lambda: europe_pmc_candidates(
-                    article,
-                    fallback_query=query,
-                    email=args.email,
-                    timeout=args.timeout,
-                ),
-            ),
-            (
-                "5. CORE: резервный поиск...",
-                "CORE",
-                lambda: core_candidates(
-                    article,
-                    fallback_query=query,
-                    api_key=args.core_key,
-                    email=args.email,
-                    timeout=args.timeout,
-                ),
-            ),
-            ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
-        )
+            article_report: dict[str, Any] = {
+                "article": article_metadata(article),
+                "source": None,
+                "download": None,
+                "duplicate": None,
+                "errors": [],
+            }
 
-        download_step_logged = False
-        for step_message, source_name, find_candidates in source_steps:
-            log(step_message)
-            try:
-                source_candidates = dedupe_candidates(with_retry(find_candidates))
-            except ApiError as exc:
-                article_report["errors"].append({"source": source_name, "error": str(exc)})
-                log(f"   {source_name} ошибка: {exc}")
+            article_duplicate = find_doi_duplicate(doi_index, article.doi, repo_root)
+            if article_duplicate:
+                skipped_path = out_dir / safe_filename(article.title, article.doi)
+                duplicate_info = duplicate_report_entry(article.doi, article_duplicate, skipped_path, repo_root)
+                article_report["source"] = article_duplicate.get("source")
+                article_report["duplicate"] = duplicate_info
+                duplicate_articles.append(duplicate_info)
+                log(duplicate_log_message(article.doi, article_duplicate, skipped_path))
+                report["articles"].append(article_report)
                 continue
 
-            if not source_candidates:
-                if source_name == "SciBban" and not article.doi:
-                    log("   SciBban пропущен: у статьи нет DOI.")
-                else:
-                    log(f"   {source_name}: источник не найден.")
-                continue
+            source_steps = (
+                ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
+                (
+                    "3. Unpaywall: ищу PDF...",
+                    "Unpaywall",
+                    lambda: unpaywall_candidates(article, email=args.email, timeout=args.timeout),
+                ),
+                (
+                    "4. Europe PMC: ищу OA копию...",
+                    "EuropePMC",
+                    lambda: europe_pmc_candidates(
+                        article,
+                        fallback_query=query,
+                        email=args.email,
+                        timeout=args.timeout,
+                    ),
+                ),
+                (
+                    "5. CORE: резервный поиск...",
+                    "CORE",
+                    lambda: core_candidates(
+                        article,
+                        fallback_query=query,
+                        api_key=args.core_key,
+                        email=args.email,
+                        timeout=args.timeout,
+                    ),
+                ),
+                ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
+            )
 
-            log(f"   {source_name}: источников найдено: {len(source_candidates)}")
+            download_step_logged = False
+            for step_message, source_name, find_candidates in source_steps:
+                if interrupted:
+                    break
+                log(step_message)
+                try:
+                    source_candidates = dedupe_candidates(with_retry(find_candidates))
+                except ApiError as exc:
+                    article_report["errors"].append({"source": source_name, "error": str(exc)})
+                    log(f"   {source_name} ошибка: {exc}")
+                    continue
+
+                if not source_candidates:
+                    if source_name == "SciBban" and not article.doi:
+                        log("   SciBban пропущен: у статьи нет DOI.")
+                    else:
+                        log(f"   {source_name}: источник не найден.")
+                    continue
+
+                log(f"   {source_name}: источников найдено: {len(source_candidates)}")
+
+                if args.dry_run:
+                    candidate = source_candidates[0]
+                    article_report["source"] = candidate.source
+                    log(f"   Первый найденный источник: {candidate.source}")
+                    break
+
+                if not download_step_logged:
+                    log("Скачать PDF...")
+                    download_step_logged = True
+
+                source_finished = False
+                for candidate in source_candidates:
+                    if interrupted:
+                        break
+                    candidate_doi = candidate.doi or article.doi
+                    candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi, repo_root)
+                    if candidate_duplicate:
+                        skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
+                        duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
+                        article_report["source"] = candidate_duplicate.get("source") or candidate.source
+                        article_report["duplicate"] = duplicate_info
+                        duplicate_articles.append(duplicate_info)
+                        log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
+                        source_finished = True
+                        break
+
+                    candidate_timeout = download_timeout_for(candidate, args.timeout)
+                    log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
+                    if candidate_timeout != args.timeout:
+                        log(f"   Timeout для {candidate.source}: {candidate_timeout:g}s")
+                    try:
+                        download_result = download_pdf(
+                            candidate,
+                            out_dir=out_dir,
+                            repo_root=repo_root,
+                            email=args.email,
+                            timeout=candidate_timeout,
+                            overwrite=args.overwrite,
+                        )
+                        article_report["source"] = download_result.get("source")
+                        article_report["download"] = download_result
+                        if register_doi_entry(
+                            doi_index,
+                            doi=candidate_doi,
+                            path=download_result.get("path"),
+                            title=article.title,
+                            query=query,
+                            source=download_result.get("source"),
+                            bytes_count=download_result.get("bytes"),
+                            report_path=None,
+                        ):
+                            save_doi_files(base_out_dir, doi_index, repo_root)
+                        log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
+                        source_finished = True
+                        break
+                    except DownloadError as exc:
+                        error = str(exc)
+                        article_report["errors"].append({"source": candidate.source, "error": error})
+                        log(f"   Не получилось: {candidate.source}: {error}")
+                        time.sleep(0.5)
+
+                if source_finished:
+                    break
+                if interrupted:
+                    break
+
+                log(f"   {source_name}: рабочий PDF не найден, перехожу к следующему источника.")
 
             if args.dry_run:
-                candidate = source_candidates[0]
-                article_report["source"] = candidate.source
-                log(f"   Первый найденный источник: {candidate.source}")
-                break
+                log("Скачать PDF: dry-run, пропускаю загрузку.")
+            elif not article_report["download"] and not article_report["duplicate"]:
+                log("   PDF не скачан для этой работы.")
 
-            if not download_step_logged:
-                log("Скачать PDF...")
-                download_step_logged = True
-
-            source_finished = False
-            for candidate in source_candidates:
-                candidate_doi = candidate.doi or article.doi
-                candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi, repo_root)
-                if candidate_duplicate:
-                    skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
-                    duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
-                    article_report["source"] = candidate_duplicate.get("source") or candidate.source
-                    article_report["duplicate"] = duplicate_info
-                    duplicate_articles.append(duplicate_info)
-                    log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
-                    source_finished = True
-                    break
-
-                candidate_timeout = download_timeout_for(candidate, args.timeout)
-                log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
-                if candidate_timeout != args.timeout:
-                    log(f"   Timeout для {candidate.source}: {candidate_timeout:g}s")
-                try:
-                    download_result = download_pdf(
-                        candidate,
-                        out_dir=out_dir,
-                        repo_root=repo_root,
-                        email=args.email,
-                        timeout=candidate_timeout,
-                        overwrite=args.overwrite,
-                    )
-                    article_report["source"] = download_result.get("source")
-                    article_report["download"] = download_result
-                    if register_doi_entry(
-                        doi_index,
-                        doi=candidate_doi,
-                        path=download_result.get("path"),
-                        title=article.title,
-                        query=query,
-                        source=download_result.get("source"),
-                        bytes_count=download_result.get("bytes"),
-                        report_path=None,
-                    ):
-                        save_doi_files(base_out_dir, doi_index, repo_root)
-                    log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
-                    source_finished = True
-                    break
-                except DownloadError as exc:
-                    error = str(exc)
-                    article_report["errors"].append({"source": candidate.source, "error": error})
-                    log(f"   Не получилось: {candidate.source}: {error}")
-                    time.sleep(0.5)
-
-            if source_finished:
-                break
-
-            log(f"   {source_name}: рабочий PDF не найден, перехожу к следующему источнику.")
-
-        if args.dry_run:
-            log("Скачать PDF: dry-run, пропускаю загрузку.")
             report["articles"].append(article_report)
-            continue
-
-        if not article_report["download"] and not article_report["duplicate"]:
-            log("   PDF не скачан для этой работы.")
-
-        report["articles"].append(article_report)
+    finally:
+        if interrupted:
+            try_finalize(args, base_out_dir, doi_index, repo_root, report, report_path, downloaded, duplicate_articles, openalex_total_works)
+            signal.signal(signal.SIGINT, old_handler)
+            raise KeyboardInterrupt
 
     downloaded = [item for item in report["articles"] if item.get("download")]
     new_downloaded = [item for item in downloaded if not item["download"].get("skipped")]
@@ -1401,13 +1434,49 @@ def main() -> int:
     if openalex_total_works and processed_count < openalex_total_works:
         log(f"   Ограничение: обработаны только первые {format_count(processed_count)} из-за --max-results={args.max_results}.")
 
-    report_path = out_dir / "metadata_and_download_report.json"
+    if interrupted:
+        try_finalize(args, base_out_dir, doi_index, repo_root, report, report_path, downloaded, duplicate_articles, openalex_total_works)
+        signal.signal(signal.SIGINT, old_handler)
+        return 130
+
     save_json(report_path, report)
     log("")
     log(f"Отчет сохранен: {report_path}")
     save_doi_files(base_out_dir, doi_index, repo_root)
+    signal.signal(signal.SIGINT, old_handler)
     return 0 if downloaded or duplicate_articles or args.dry_run else 2
 
 
+def try_finalize(args, base_out_dir, doi_index, repo_root, report, report_path, downloaded, duplicate_articles, openalex_total_works):
+    try:
+        downloaded_count = len([item for item in report["articles"] if item.get("download") and not item["download"].get("skipped")])
+        duplicate_count = len(duplicate_articles)
+        processed_count = len(report["articles"])
+        report["processed_article_count"] = processed_count
+        report["downloaded_pdf_count"] = downloaded_count
+        report["duplicate_doi_count"] = duplicate_count
+        report["saved_or_existing_pdf_count"] = len([item for item in report["articles"] if item.get("download")])
+        report["available_pdf_count"] = report["saved_or_existing_pdf_count"] + duplicate_count
+        report["processed_to_openalex_total_ratio"] = processed_count / openalex_total_works if openalex_total_works else None
+        report["downloaded_pdf_to_openalex_total_ratio"] = downloaded_count / openalex_total_works if openalex_total_works else None
+        report["available_pdf_to_openalex_total_ratio"] = report["available_pdf_count"] / openalex_total_works if openalex_total_works else None
+        save_json(report_path, report)
+        save_doi_files(base_out_dir, doi_index, repo_root)
+        log("")
+        log("Финализация после прерывания:")
+        log(f"   Обработано работ: {format_count(processed_count)}")
+        log(f"   Новых PDF скачано: {format_count(downloaded_count)}")
+        log(f"   PDF сохранены: {format_count(report['saved_or_existing_pdf_count'])}")
+        log(f"   DOI-дубликатов: {format_count(duplicate_count)}")
+        log(f"   Отчет: {report_path}")
+    except Exception as exc:
+        log(f"Ошибка финализации: {exc}")
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        log("")
+        log("Прервано пользователем.")
+        sys.exit(130)
