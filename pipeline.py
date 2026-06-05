@@ -271,6 +271,30 @@ def log(message: str) -> None:
     print(message, flush=True)
 
 
+def with_retry(func, *, retries: int = 2, delay: float = 1.0, backoff: float = 2.0):
+    """Execute func with retries on connection errors. Skip after retries exhausted."""
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            return func()
+        except (http.client.RemoteDisconnected, http.client.BadStatusLine,
+                http.client.IncompleteRead, ConnectionError, URLError, TimeoutError) as exc:
+            last_exc = exc
+            if attempt < retries:
+                wait_time = delay * (backoff ** attempt)
+                log(f"   Connection error (attempt {attempt + 1}/{retries + 1}): {exc}. Retrying in {wait_time:g}s...")
+                time.sleep(wait_time)
+            else:
+                log(f"   Connection closed after {retries + 1} attempts: {exc}. Skipping this source.")
+                raise ApiError(f"Connection failed after retries: {exc}") from exc
+        except ApiError:
+            raise
+        except Exception as exc:
+            log(f"   Unexpected error: {exc}. Skipping this source.")
+            raise ApiError(f"Unexpected error: {exc}") from exc
+    raise ApiError(f"Connection failed after retries: {last_exc}") from last_exc
+
+
 def format_count(value: int | None) -> str:
     return "unknown" if value is None else f"{value:,}"
 
@@ -1159,14 +1183,14 @@ def main() -> int:
     articles: list[Article] = []
     openalex_total_works: int | None = None
     try:
-        pages = openalex_search_pages(
+        pages = with_retry(lambda: openalex_search_pages(
             query,
             email=args.email,
             api_key=args.openalex_key,
             max_results=args.max_results,
             page_size=args.page_size,
             timeout=args.timeout,
-        )
+        ))
         for page_number, page_articles, meta in pages:
             total_count = meta.get("count")
             if openalex_total_works is None and isinstance(total_count, int):
@@ -1247,7 +1271,7 @@ def main() -> int:
         for step_message, source_name, find_candidates in source_steps:
             log(step_message)
             try:
-                source_candidates = dedupe_candidates(find_candidates())
+                source_candidates = dedupe_candidates(with_retry(find_candidates))
             except ApiError as exc:
                 article_report["errors"].append({"source": source_name, "error": str(exc)})
                 log(f"   {source_name} ошибка: {exc}")
