@@ -445,6 +445,21 @@ def sci_bban_candidates(article: Article) -> list[PdfCandidate]:
     ]
 
 
+def strip_version_param(url: str) -> str: #antibot challendge
+    """Remove the 'version' query parameter from URL if present."""
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    if 'pdf' not in parts.path:
+        return url
+    query_params = [p for p in parts.query.split("&") if not p.lower().startswith("version=")]
+    if not query_params:
+        # Если после удаления version не осталось параметров — удаляем ? совсем
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", parts.fragment))
+    
+    new_query = urlencode(query_params)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+
 def unpaywall_candidates(
     article: Article,
     *,
@@ -477,7 +492,7 @@ def unpaywall_candidates(
         if url_for_pdf:
             candidates.append(
                 PdfCandidate(
-                    url=url_for_pdf,
+                    url=strip_version_param(url_for_pdf),
                     source="Unpaywall",
                     article_title=article.title,
                     doi=article.doi,
@@ -488,7 +503,7 @@ def unpaywall_candidates(
         if url and looks_like_pdf_url(url):
             candidates.append(
                 PdfCandidate(
-                    url=url,
+                    url=strip_version_param(url),
                     source="Unpaywall",
                     article_title=article.title,
                     doi=article.doi,
@@ -593,7 +608,8 @@ def core_candidates(
                 timeout=timeout,
             )
         except ApiError as exc:
-            log(f"   CORE v3 не ответил для {term!r}: {exc}")
+            # log(f"   CORE v3 не ответил для {term!r}: {exc}")
+            log(f"   CORE v3 не ответил для {term!r}")
             data = {}
 
         for item in data.get("results", []) or data.get("data", []) or []:
@@ -618,7 +634,8 @@ def core_candidates(
                 timeout=timeout,
             )
         except ApiError as exc:
-            log(f"   CORE v2 не ответил для {term!r}: {exc}")
+            # log(f"   CORE v2 не ответил для {term!r}: {exc}")
+            log(f"   CORE v2 не ответил для {term!r}")
             continue
 
         for item in data_v2.get("data", []) or []:
@@ -1054,7 +1071,7 @@ def save_doi_files(base_out_dir: Path, index: dict[str, Any], repo_root: Path) -
 
 def duplicate_log_message(doi: str | None, existing: dict[str, Any], skipped_path: Path) -> str:
     existing_path = existing.get("path") or "path unknown"
-    return f"   Дубликат DOI {clean_doi(doi)}: уже есть файл {existing_path}; пропускаю {skipped_path}"
+    return f"   Дубликат DOI {clean_doi(doi)}: уже есть файл {existing_path}"
 
 
 def duplicate_report_entry(
@@ -1166,22 +1183,12 @@ def main() -> int:
     normalize_index_paths(doi_index, repo_root)
     bootstrapped_dois = bootstrap_doi_index_from_reports(base_out_dir, doi_index, repo_root)
     doi_index_path, doi_numbers_path = save_doi_files(base_out_dir, doi_index, repo_root)
-    duplicate_articles: list[dict[str, Any]] = []
 
     report: dict[str, Any] = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "query": args.query,
         "normalized_query": query,
-        "base_out_dir": repo_relative_path(base_out_dir, repo_root),
-        "query_dir_name": query_dir_name,
-        "out_dir": repo_relative_path(out_dir, repo_root),
-        "doi_index_path": repo_relative_path(doi_index_path, repo_root),
-        "doi_numbers_path": repo_relative_path(doi_numbers_path, repo_root),
-        "openalex_search_param": OPENALEX_SEARCH_PARAM,
         "openalex_total_works": None,
-        "openalex_max_results": args.max_results,
-        "openalex_page_size": args.page_size,
-        "duplicate_articles": duplicate_articles,
         "articles": [],
     }
 
@@ -1194,6 +1201,8 @@ def main() -> int:
     log(f"1. OpenAlex: получаю метаданные по {OPENALEX_SEARCH_PARAM} страницами до {args.page_size} работ...")
     articles: list[Article] = []
     openalex_total_works: int | None = None
+    downloaded: list[dict[str, Any]] = []
+    duplicate_articles: list[dict[str, Any]] = []
     try:
         pages = with_retry(lambda: openalex_search_pages(
             query,
@@ -1250,16 +1259,27 @@ def main() -> int:
                 "errors": [],
             }
 
-            article_duplicate = find_doi_duplicate(doi_index, article.doi, repo_root)
-            if article_duplicate:
-                skipped_path = out_dir / safe_filename(article.title, article.doi)
-                duplicate_info = duplicate_report_entry(article.doi, article_duplicate, skipped_path, repo_root)
-                article_report["source"] = article_duplicate.get("source")
-                article_report["duplicate"] = duplicate_info
-                duplicate_articles.append(duplicate_info)
-                log(duplicate_log_message(article.doi, article_duplicate, skipped_path))
-                report["articles"].append(article_report)
-                continue
+            article_key = doi_key(article.doi)
+            doi_entry = doi_index.get("items", {}).get(article_key) if article_key else None
+
+            if doi_entry:
+                candidates = [doi_entry, *(doi_entry.get("duplicate_paths") or [])]
+                valid_entry = next(
+                    (item for item in candidates if item.get("path") and stored_path_exists(item["path"], repo_root)),
+                    None,
+                )
+                if valid_entry:
+                    skipped_path = out_dir / safe_filename(article.title, article.doi)
+                    article_report["duplicate"] = duplicate_report_entry(
+                        article.doi, valid_entry, skipped_path, repo_root,
+                    )
+                    article_report["source"] = valid_entry.get("source")
+                    duplicate_articles.append(article_report["duplicate"])
+                    log(duplicate_log_message(article.doi, valid_entry, skipped_path))
+                    report["articles"].append(article_report)
+                    continue
+                else:
+                    log(f"   DOI {clean_doi(article.doi)} найден в индексе, но файл отсутствует. Повторная загрузка...")
 
             source_steps = (
                 ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
