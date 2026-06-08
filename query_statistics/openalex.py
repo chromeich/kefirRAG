@@ -16,26 +16,26 @@ from time import sleep
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 
 QUERIES = [
-    "milk fermentation",
-    "dairy fermentation",
-    "fermented milk",
-    "yogurt fermentation",
+    # "milk fermentation",
+    # "dairy fermentation",
+    # "fermented milk",
+    # "yogurt fermentation",
     "kefir fermentation",
-    "starter cultures",
-    "lactic acid bacteria",
-    "probiotic dairy",
-    "milk acidification",
-    "fermentation kinetics",
-    "fermentation optimization",
-    "casein hydrolysis",
-    "whey protein fermentation",
-    "bioactive peptides",
-    "proteolysis",
-    "metabolomics dairy",
-    "flavor compounds yogurt",
-    "industrial dairy fermentation",
-    "novel dairy processing",
-    "future dairy technologies",
+    # "starter cultures",
+    # "lactic acid bacteria",
+    # "probiotic dairy",
+    # "milk acidification",
+    # "fermentation kinetics",
+    # "fermentation optimization",
+    # "casein hydrolysis",
+    # "whey protein fermentation",
+    # "bioactive peptides",
+    # "proteolysis",
+    # "metabolomics dairy",
+    # "flavor compounds yogurt",
+    # "industrial dairy fermentation",
+    # "novel dairy processing",
+    # "future dairy technologies",
 ]
 
 
@@ -80,7 +80,7 @@ def fetch_count(query: str, args: argparse.Namespace) -> int:
         raise SystemExit("Missing dependency: requests. Run `pip install -r requirements.txt`.") from exc
 
     params = {
-        "search": query,
+        "search.title_and_abstract": query,
         "per_page": 1,
     }
     if args.email:
