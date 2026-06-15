@@ -58,6 +58,26 @@ EUROPE_PMC_RENDER_MIN_TIMEOUT = 120.0
 OJS_DOWNLOAD_TIMEOUT_MULTIPLIER = 4
 OJS_DOWNLOAD_MIN_TIMEOUT = 180.0
 MAX_HTML_DOWNLOAD_FOLLOWS = 3
+MDPI_CDN_URL = "https://mdpi-res.com/d_attachment/{slug}/{article_id}/article_deploy/{article_id}.pdf"
+MDPI_DOI_CODE_TO_CDN_SLUG = {
+    "app": "applsci",
+    "nu": "nutrients",
+    "rs": "remotesensing",
+}
+PUBLISHER_MIRROR_HOSTS = {
+    "analyticalsciencejournals.onlinelibrary.wiley.com",
+    "cell.com",
+    "onlinelibrary.wiley.com",
+    "sciencedirect.com",
+    "www.cell.com",
+    "www.sciencedirect.com",
+}
+REPOSITORY_MIRROR_HOST_PRIORITY = {
+    "research.chalmers.se": 0,
+    "orbit.dtu.dk": 1,
+    "pmc.ncbi.nlm.nih.gov": 2,
+    "www.ncbi.nlm.nih.gov": 2,
+}
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 SCI_BBAN_PDF_URL = "https://sci.bban.top/pdf/{doi}.pdf"
@@ -255,6 +275,182 @@ def looks_like_pdf_url(url: str) -> bool:
     return lower.endswith(".pdf") or "/pdf/" in lower or "download/pdf" in lower
 
 
+def normalized_mdpi_slug(value: str | None) -> str | None:
+    if not value:
+        return None
+    slug = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "", slug.lower())
+    return slug or None
+
+
+def mdpi_pdf_parts(url: str) -> tuple[int, int] | None:
+    parsed = urlsplit(url)
+    host = parsed.netloc.lower()
+    if host not in {"mdpi.com", "www.mdpi.com"}:
+        return None
+
+    path_parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(path_parts) < 5 or path_parts[-1].lower() != "pdf":
+        return None
+
+    try:
+        volume = int(path_parts[-4])
+        article_number = int(path_parts[-2])
+    except ValueError:
+        return None
+    return volume, article_number
+
+
+def mdpi_doi_slug(doi: str | None) -> str | None:
+    cleaned = clean_doi(doi)
+    if not cleaned:
+        return None
+    match = re.match(r"^10\.3390/([a-z]+)\d{6,}$", cleaned, flags=re.I)
+    if not match:
+        return None
+    doi_code = match.group(1).lower()
+    return MDPI_DOI_CODE_TO_CDN_SLUG.get(doi_code, doi_code)
+
+
+def article_source_slugs(article: Article) -> list[str]:
+    slugs: list[str] = []
+    locations = []
+    if isinstance(article.raw.get("primary_location"), dict):
+        locations.append(article.raw["primary_location"])
+    if isinstance(article.raw.get("best_oa_location"), dict):
+        locations.append(article.raw["best_oa_location"])
+    locations.extend(location for location in article.raw.get("locations") or [] if isinstance(location, dict))
+
+    for location in locations:
+        source = location.get("source") or {}
+        if not isinstance(source, dict):
+            continue
+        for key in ("display_name", "display_name_alternatives"):
+            value = source.get(key)
+            values = value if isinstance(value, list) else [value]
+            for item in values:
+                slug = normalized_mdpi_slug(item if isinstance(item, str) else None)
+                if slug:
+                    slugs.append(slug)
+    return slugs
+
+
+def mdpi_cdn_pdf_urls(url: str, article: Article) -> list[str]:
+    parts = mdpi_pdf_parts(url)
+    if not parts:
+        return []
+    volume, article_number = parts
+
+    slugs = [mdpi_doi_slug(article.doi), *article_source_slugs(article)]
+    result: list[str] = []
+    seen: set[str] = set()
+    for slug in slugs:
+        if not slug or slug in seen:
+            continue
+        seen.add(slug)
+        article_id = f"{slug}-{volume}-{article_number:05d}"
+        result.append(MDPI_CDN_URL.format(slug=slug, article_id=article_id))
+    return result
+
+
+def publisher_url_needs_repository_mirrors(url: str) -> bool:
+    parsed = urlsplit(url)
+    host = parsed.netloc.lower()
+    if host.startswith("www."):
+        host_without_www = host[4:]
+    else:
+        host_without_www = host
+    return host in PUBLISHER_MIRROR_HOSTS or host_without_www in PUBLISHER_MIRROR_HOSTS
+
+
+def pmcid_from_location(location: dict[str, Any]) -> str | None:
+    for value in (location.get("id"), location.get("landing_page_url"), location.get("pdf_url")):
+        if not isinstance(value, str):
+            continue
+        match = re.search(r"\bPMC?(\d{3,})\b", value, flags=re.I)
+        if match:
+            return f"PMC{match.group(1)}"
+        match = re.search(r"pubmedcentral\.nih\.gov:(\d{3,})\b", value, flags=re.I)
+        if match:
+            return f"PMC{match.group(1)}"
+    return None
+
+
+def normalize_repository_mirror_url(url: str, location: dict[str, Any]) -> str | None:
+    parsed = urlsplit(url)
+    host = parsed.netloc.lower()
+    if host in {"doi.org", "dx.doi.org", "pubmed.ncbi.nlm.nih.gov"}:
+        return None
+    if host in {"pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"} and "/pmc/articles/" in parsed.path:
+        pmcid = pmcid_from_location(location)
+        if not pmcid:
+            return None
+        return f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/"
+    return url
+
+
+def repository_mirror_priority(url: str) -> int:
+    host = urlsplit(url).netloc.lower()
+    return REPOSITORY_MIRROR_HOST_PRIORITY.get(host, 20)
+
+
+def repository_mirror_urls(article: Article) -> list[tuple[str, str]]:
+    locations = []
+    if isinstance(article.raw.get("primary_location"), dict):
+        locations.append(article.raw["primary_location"])
+    if isinstance(article.raw.get("best_oa_location"), dict):
+        locations.append(article.raw["best_oa_location"])
+    locations.extend(location for location in article.raw.get("locations") or [] if isinstance(location, dict))
+
+    mirrors: list[tuple[int, str, str]] = []
+    seen: set[str] = set()
+    for location in locations:
+        source = location.get("source") or {}
+        if not isinstance(source, dict) or source.get("type") != "repository":
+            continue
+
+        source_name = source.get("display_name") if isinstance(source.get("display_name"), str) else "repository"
+        for key in ("pdf_url", "landing_page_url"):
+            url = location.get(key)
+            if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+                continue
+            normalized_url = normalize_repository_mirror_url(url, location)
+            if not normalized_url:
+                continue
+            key_url = requote_url(normalized_url)
+            if key_url in seen:
+                continue
+            seen.add(key_url)
+            mirrors.append((repository_mirror_priority(normalized_url), normalized_url, source_name))
+
+    return [(url, source_name) for _, url, source_name in sorted(mirrors, key=lambda item: item[0])]
+
+
+def add_pdf_candidate_with_mirrors(candidates: list[PdfCandidate], candidate: PdfCandidate, article: Article) -> None:
+    for cdn_url in mdpi_cdn_pdf_urls(candidate.url, article):
+        candidates.append(
+            PdfCandidate(
+                url=cdn_url,
+                source=f"{candidate.source}/MDPI CDN",
+                article_title=candidate.article_title,
+                doi=candidate.doi,
+                note="mdpi-res fallback",
+            )
+        )
+    if publisher_url_needs_repository_mirrors(candidate.url):
+        for mirror_url, source_name in repository_mirror_urls(article):
+            candidates.append(
+                PdfCandidate(
+                    url=mirror_url,
+                    source=f"{candidate.source}/Repository",
+                    article_title=candidate.article_title,
+                    doi=candidate.doi,
+                    note=f"{source_name} mirror",
+                )
+            )
+    candidates.append(candidate)
+
+
 def deep_find_urls(value: Any) -> list[str]:
     found: list[str] = []
     if isinstance(value, dict):
@@ -396,26 +592,30 @@ def openalex_pdf_candidates(article: Article) -> list[PdfCandidate]:
         for key in ("pdf_url", "url_for_pdf"):
             url = location.get(key)
             if url:
-                candidates.append(
+                add_pdf_candidate_with_mirrors(
+                    candidates,
                     PdfCandidate(
                         url=url,
                         source="OpenAlex",
                         article_title=article.title,
                         doi=article.doi,
                         note=key,
-                    )
+                    ),
+                    article,
                 )
 
     oa_url = (article.raw.get("open_access") or {}).get("oa_url")
     if oa_url and looks_like_pdf_url(oa_url):
-        candidates.append(
+        add_pdf_candidate_with_mirrors(
+            candidates,
             PdfCandidate(
                 url=oa_url,
                 source="OpenAlex",
                 article_title=article.title,
                 doi=article.doi,
                 note="open_access.oa_url",
-            )
+            ),
+            article,
         )
     return candidates
 
@@ -445,19 +645,22 @@ def sci_bban_candidates(article: Article) -> list[PdfCandidate]:
     ]
 
 
-def strip_version_param(url: str) -> str: #antibot challendge
+def strip_version_param(url: str) -> str:
     """Remove the 'version' query parameter from URL if present."""
     parts = urlsplit(url)
     if not parts.query:
         return url
-    if 'pdf' not in parts.path:
+    if "pdf" not in parts.path.lower():
         return url
-    query_params = [p for p in parts.query.split("&") if not p.lower().startswith("version=")]
+    query_params = [
+        part
+        for part in parts.query.split("&")
+        if part and part.split("=", 1)[0].lower() != "version"
+    ]
     if not query_params:
-        # Если после удаления version не осталось параметров — удаляем ? совсем
         return urlunsplit((parts.scheme, parts.netloc, parts.path, "", parts.fragment))
-    
-    new_query = urlencode(query_params)
+
+    new_query = "&".join(query_params)
     return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 
 def unpaywall_candidates(
@@ -490,25 +693,29 @@ def unpaywall_candidates(
             continue
         url_for_pdf = location.get("url_for_pdf")
         if url_for_pdf:
-            candidates.append(
+            add_pdf_candidate_with_mirrors(
+                candidates,
                 PdfCandidate(
                     url=strip_version_param(url_for_pdf),
                     source="Unpaywall",
                     article_title=article.title,
                     doi=article.doi,
                     note=location.get("host_type"),
-                )
+                ),
+                article,
             )
         url = location.get("url")
         if url and looks_like_pdf_url(url):
-            candidates.append(
+            add_pdf_candidate_with_mirrors(
+                candidates,
                 PdfCandidate(
                     url=strip_version_param(url),
                     source="Unpaywall",
                     article_title=article.title,
                     doi=article.doi,
                     note=location.get("host_type"),
-                )
+                ),
+                article,
             )
     return candidates
 
@@ -678,17 +885,56 @@ def dedupe_candidates(candidates: list[PdfCandidate]) -> list[PdfCandidate]:
     return result
 
 
-def looks_like_anti_bot_challenge(body: str) -> bool:
-    lowered = body.lower()
-    markers = (
-        "just a moment",
+def looks_like_anti_bot_challenge(body: str, *urls: str | None) -> bool:
+    lowered = " ".join([body, *(url or "" for url in urls)]).lower()
+    strong_markers = (
         "checking your browser",
-        "cloudflare",
         "cf-browser-verification",
         "cf-challenge",
+        "cf-mitigated",
         "enable cookies",
+        "cookieabsent",
+        "cookie absent",
+        "pardon the interruption",
+        "browser made us think you were a bot",
+        "verify you are a human",
+        "distil_r_captcha",
+        "incapsula",
+        "datadome",
+        "making sure you're not a bot",
+        "making sure you&#39;re not a bot",
+        "anubis_challenge",
+        "cloudpmc-viewer-pow",
+        "pow_challenge",
+        "proof-of-work",
+        "/challenge",
     )
-    return any(marker in lowered for marker in markers)
+    if any(marker in lowered for marker in strong_markers):
+        return True
+    if "just a moment" in lowered and ("cloudflare" in lowered or "challenge" in lowered):
+        return True
+    if "cloudflare" in lowered and (
+        "/cdn-cgi/challenge" in lowered
+        or "challenge-platform" in lowered
+        or "__cf_chl" in lowered
+    ):
+        return True
+    if "preparing to download" in lowered and (
+        "cloudpmc-viewer-pow" in lowered
+        or "pow-" in lowered
+        or "proof-of-work" in lowered
+    ):
+        return True
+    return False
+
+
+def looks_like_access_denied(body: str) -> bool:
+    lowered = body.lower()
+    return "access denied" in lowered and (
+        "permission to access" in lowered
+        or "akamai" in lowered
+        or "reference" in lowered
+    )
 
 
 def is_ojs_download_url(url: str) -> bool:
@@ -728,6 +974,8 @@ def download_referer_for(candidate: PdfCandidate) -> str | None:
     source = candidate.source.lower()
     if is_ojs_download_url(candidate.url):
         return ojs_article_referer(candidate.url)
+    if mdpi_pdf_parts(candidate.url):
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rsplit("/pdf", 1)[0], "", ""))
     if source == "europepmc" and "europepmc.org" in parsed.netloc.lower():
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
     if source == "unpaywall" and "unpaywall.org" in parsed.netloc.lower():
@@ -836,9 +1084,16 @@ def download_pdf(
                 has_pdf_magic = b"%PDF-" in first_chunk[:2048]
                 looks_like_html = "html" in content_type or first_nonspace.startswith((b"<!doctype", b"<html"))
 
+                if not has_pdf_magic:
+                    first_text = first_chunk.decode("utf-8", errors="replace")
+                    if looks_like_anti_bot_challenge(first_text, response_url):
+                        raise DownloadError(f"anti-bot challenge at {redact_url(response_url)}")
+
                 if not has_pdf_magic and looks_like_html:
                     html = first_chunk + response.read(1024 * 1024)
                     html_text = html.decode("utf-8", errors="replace")
+                    if looks_like_anti_bot_challenge(html_text, response_url):
+                        raise DownloadError(f"anti-bot challenge at {redact_url(response_url)}")
                     links = html_download_links(html_text, response_url)
                     if not links:
                         raise DownloadError(f"response is HTML without a PDF/download link, Content-Type={content_type!r}")
@@ -866,10 +1121,20 @@ def download_pdf(
                         total += len(chunk)
                 break
         except HTTPError as exc:
-            body = exc.read(700).decode("utf-8", errors="replace")
+            body = exc.read(16 * 1024).decode("utf-8", errors="replace")
             temp_destination.unlink(missing_ok=True)
-            if exc.code in {403, 429} and looks_like_anti_bot_challenge(body):
+            location = exc.headers.get("Location", "") if exc.headers else ""
+            redirect_url = urljoin(current_url, location) if location else ""
+            header_text = str(exc.headers) if exc.headers else ""
+            if exc.code in {301, 302, 303, 307, 308, 403, 429, 503} and looks_like_anti_bot_challenge(
+                body,
+                header_text,
+                exc.geturl(),
+                redirect_url,
+            ):
                 raise DownloadError(f"HTTP {exc.code}: anti-bot challenge") from exc
+            if exc.code == 403 and looks_like_access_denied(body):
+                raise DownloadError("HTTP 403: access denied") from exc
             body = re.sub(r"\s+", " ", body).strip()[:300]
             raise DownloadError(f"HTTP {exc.code}: {body}") from exc
         except URLError as exc:
@@ -1282,34 +1547,34 @@ def main() -> int:
                     log(f"   DOI {clean_doi(article.doi)} найден в индексе, но файл отсутствует. Повторная загрузка...")
 
             source_steps = (
-                ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
+                # ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
                 (
                     "3. Unpaywall: ищу PDF...",
                     "Unpaywall",
                     lambda: unpaywall_candidates(article, email=args.email, timeout=args.timeout),
                 ),
-                (
-                    "4. Europe PMC: ищу OA копию...",
-                    "EuropePMC",
-                    lambda: europe_pmc_candidates(
-                        article,
-                        fallback_query=query,
-                        email=args.email,
-                        timeout=args.timeout,
-                    ),
-                ),
-                (
-                    "5. CORE: резервный поиск...",
-                    "CORE",
-                    lambda: core_candidates(
-                        article,
-                        fallback_query=query,
-                        api_key=args.core_key,
-                        email=args.email,
-                        timeout=args.timeout,
-                    ),
-                ),
-                ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
+                # (
+                #     "4. Europe PMC: ищу OA копию...",
+                #     "EuropePMC",
+                #     lambda: europe_pmc_candidates(
+                #         article,
+                #         fallback_query=query,
+                #         email=args.email,
+                #         timeout=args.timeout,
+                #     ),
+                # ),
+                # (
+                #     "5. CORE: резервный поиск...",
+                #     "CORE",
+                #     lambda: core_candidates(
+                #         article,
+                #         fallback_query=query,
+                #         api_key=args.core_key,
+                #         email=args.email,
+                #         timeout=args.timeout,
+                #     ),
+                # ),
+                # ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
             )
 
             download_step_logged = False
