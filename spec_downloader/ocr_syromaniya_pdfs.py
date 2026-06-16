@@ -15,6 +15,8 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -23,6 +25,15 @@ DEFAULT_PDF_DIR = ROOT_DIR / "syromaniya" / "pdfs"
 DEFAULT_OCR_DIR = ROOT_DIR / "syromaniya" / "ocr"
 DEFAULT_DPI = 200
 DEFAULT_LANG = "rus+eng"
+DEFAULT_WORKERS = 4
+
+
+@dataclass(frozen=True)
+class OcrResult:
+    status: str
+    pdf_path: Path
+    out_path: Path
+    error: str | None = None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -67,6 +78,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         help="Process only the first N PDF files.",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help=f"Number of PDF files to OCR in parallel. Default: {DEFAULT_WORKERS}",
     )
     return parser.parse_args(argv)
 
@@ -148,7 +165,7 @@ def process_pdf(pdf_path: Path, out_path: Path, args: argparse.Namespace) -> Non
         with tempfile.TemporaryDirectory(prefix="syromaniya_ocr_") as tmp:
             tmp_dir = Path(tmp)
             for index, page in enumerate(document, start=1):
-                print(f"    page {index}/{document.page_count}")
+                print(f"    {pdf_path.name}: page {index}/{document.page_count}")
                 ocr_texts.append(ocr_page(page, tmp_dir, index, args))
 
     lines: list[str] = [
@@ -173,11 +190,26 @@ def process_pdf(pdf_path: Path, out_path: Path, args: argparse.Namespace) -> Non
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def process_pdf_task(pdf_path: Path, args: argparse.Namespace) -> OcrResult:
+    out_path = args.out_dir / safe_text_filename(pdf_path)
+    if out_path.exists() and not args.force:
+        return OcrResult(status="skipped", pdf_path=pdf_path, out_path=out_path)
+
+    try:
+        process_pdf(pdf_path, out_path, args)
+    except Exception as exc:
+        return OcrResult(status="failed", pdf_path=pdf_path, out_path=out_path, error=str(exc))
+
+    return OcrResult(status="processed", pdf_path=pdf_path, out_path=out_path)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
     if args.dpi <= 0:
         raise SystemExit("--dpi must be a positive integer")
+    if args.workers <= 0:
+        raise SystemExit("--workers must be a positive integer")
     if not args.pdf_dir.exists():
         raise SystemExit(f"PDF directory does not exist: {args.pdf_dir}")
 
@@ -194,23 +226,22 @@ def main(argv: list[str] | None = None) -> None:
     skipped = 0
     failed = 0
 
-    for pdf_path in pdf_paths:
-        out_path = args.out_dir / safe_text_filename(pdf_path)
-        if out_path.exists() and not args.force:
-            print(f"Skipping existing: {out_path}")
-            skipped += 1
-            continue
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = {executor.submit(process_pdf_task, pdf_path, args): pdf_path for pdf_path in pdf_paths}
 
-        print(f"OCR: {pdf_path}")
-        try:
-            process_pdf(pdf_path, out_path, args)
-        except Exception as exc:
-            failed += 1
-            print(f"  failed: {exc}", file=sys.stderr)
-            continue
+        for future in as_completed(futures):
+            result = future.result()
+            if result.status == "skipped":
+                print(f"Skipping existing: {result.out_path}")
+                skipped += 1
+                continue
+            if result.status == "failed":
+                print(f"Failed: {result.pdf_path}: {result.error}", file=sys.stderr)
+                failed += 1
+                continue
 
-        processed += 1
-        print(f"  saved: {out_path}")
+            print(f"Saved: {result.out_path}")
+            processed += 1
 
     print(f"\nDone. Processed: {processed}, skipped: {skipped}, failed: {failed}")
 

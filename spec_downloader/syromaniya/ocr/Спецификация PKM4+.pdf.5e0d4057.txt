@@ -1,0 +1,197 @@
+Source PDF: spec_downloader/syromaniya/pdfs/Спецификация PKM4+.pdf
+OCR: tesseract rus+eng, 200 DPI
+
+===== PAGE 1 =====
+
+--- PyMuPDF text ---
+INFORMAZIONI
+Fermenti lattici concentrati per l’inoculo diretto nel latte
+APPLICAZIONE
+Coltura di ceppi di fermenti selezionati e combinati per rispondere a specifiche
+esigenze tecnologiche, indicati per la produzione di formaggi vaccini, ovini e caprini a
+breve, media, o lunga stagionatura con un profilo aromatico accentuato
+COMPOSIZIONE
+La miscela contiene ceppi di Lactococcus lactis subsp. lactis, Lactococcus lactis
+subsp. cremoris, Lactobacillus paracasei, Lactococcus lactis subsp. lactis biovar
+diacetylactis,
+Leuconostoc
+mesenteroides,
+Leuconostoc
+pseudomesenteroides,
+Kluyeromices marxianus subsp. marxianus
+ATTIVITA’
+- FERMENTATIVA +
+- PRODUZIONE DI GAS +
+- PRODUZIONE DI AROMA ++++
+PROPRIETA’
+MICROBIOLOGICHE
+Enterobatteriacee
+< 10 ufc/g
+Stafilococchi Coagulasi positivi
+< 10 ufc/g
+Muffe
+< 50 ufc/g
+Lieviti
+< 50 ufc/g
+Listeria monocytogenes
+Assente /25 g
+Salmonelle spp
+Assente /25 g
+CONFEZIONE
+Bustine in alluminio poliaccoppiato idoneo al contatto con gli alimenti
+CONSERVAZIONE
+La coltura va conservata a temperatura inferiore a 4°C; tale stoccaggio garantisce la
+shelf-life almeno fino alla data indicata in etichetta.
+ISTRUZIONI D’USO
+Versare il contenuto della busta direttamente nel latte in caldaia e mescolare
+lentamente. Agitare la miscela per 10-15 minuti affinché la coltura possa distribuirsi in
+maniera uniforme.
+DOSAGGIO
+1U ogni 100 litri di latte
+3U ogni 300 litri di latte
+10U ogni 1000 litri di latte
+50U ogni 5000 litri di latte
+ROTAZIONI
+DISPONIBILI
+PKM4+
+
+--- Tesseract OCR ---
+INFORMAZIONI
+
+APPLICAZIONE
+
+COMPOSIZIONE
+
+PROPRIETA’
+MICROBIOLOGICHE
+
+CONFEZIONE
+
+CONSERVAZIONE
+
+ISTRUZIONI D’USO
+
+DOSAGGIO
+
+ROTAZIONI
+DISPONIBILI
+
+PKM4+
+
+Fermenti lattici concentrati per I’inoculo diretto nel latte
+
+Coltura di ceppi di fermenti selezionati e combinati per rispondere а specifiche
+esigenze tecnologiche, indicati per la produzione di formaggi vaccini, ovini e caprini a
+breve, media, o lunga stagionatura con un profilo aromatico accentuato
+
+La miscela contiene ceppi di Lactococcus lactis subsp. lactis, Lactococcus lactis
+subsp. cremoris, Lactobacillus paracasei, Lactococcus lactis subsp. lactis biovar
+diacetylactis, Leuconostoc mesenteroides, Leuconostoc pseudomesenteroides,
+Kluyeromices marxianus subsp. marxianus
+
+ATTIVITA’
+
+- FERMENTATIVA +
+
+- PRODUZIONE DI GAS +
+
+- PRODUZIONE DI AROMA ++++
+
+Enterobatteriacee < 10 ufc/g
+Stafilococchi Coagulasi positivi < 10 ufc/g
+Muffe < 50 ufc/g
+Lieviti < 50 ufc/g
+Listeria monocytogenes Assente /25 g
+Salmonelle spp Assente /25 g
+
+Bustine in alluminio poliaccoppiato idoneo al contatto con gli alimenti
+
+La coltura va conservata a temperatura inferiore a 4°C; tale stoccaggio garantisce la
+shelf-life almeno fino alla data indicata in etichetta.
+
+Versare il contenuto della busta direttamente nel latte in caldaia e mescolare
+lentamente. Agitare la miscela per 10-15 minuti affinché la coltura possa distribuirsi in
+maniera uniforme.
+
+1U ogni 100 litri di latte
+ЗИ ogni 300 litri di latte
+10U ogni 1000 litri di latte
+50U ogni 5000 litri di latte
+
+===== PAGE 2 =====
+
+--- PyMuPDF text ---
+PAESE DI ORIGINE
+Italia
+DICHIARAZIONE ALLERGENI
+Lista allergeni elencati nel Reg. CE 1169/2011
+SI’ NO
+Cereali contenenti glutine (cioè grano, segale, orzo, avena, farro, kamut o i loro ceppi ibridati) e
+prodotti derivati
+X
+Crostacei e prodotti a base di crostacei.
+X
+Uova e prodotti a base di uova.
+X
+Pesce e prodotti a base di pesce
+X
+Arachidi e prodotti a base di arachidi.
+X
+Soia e prodotti a base di soia
+X
+Latte e prodotti a base di latte (incluso lattosio)
+X
+Frutta a guscio, cioè mandorle (Amygdalus communis L.), nocciole (Corylus avellana), noci
+comuni (Juglans regia), noci di anacardi (Anacardium occidentale), noci di pecan (Carya
+illinoiesis (Wangenh.) K. Koch), noci del Brasile (Bertholletia excelsa), pistacchi (Pistacia vera),
+noci del Queensland (Macadamia ternifolia) e prodotti derivati
+X
+Sedano e prodotti a base di sedano.
+X
+Senape e prodotti a base di senape.
+X
+Semi di sesamo e prodotti a base di semi di sesamo.
+X
+Anidride solforosa e solfiti in concentrazioni superiori a 10 mg/kg o 10 mg/l espressi come
+SO2.
+X
+Lupini e prodotti a base di lupini.
+X
+Molluschi e prodotti a base di molluschi.
+X
+DICHIARAZIONE O.G.M.
+Il prodotto non contiene e non è stato ottenuto da
+Organismi Geneticamente Modificati in accordo
+con i Reg. CE n. 1829/2003 e n. 1830/2003.
+
+--- Tesseract OCR ---
+PAESE DI ORIGINE Italia
+
+DICHIARAZIONE ALLERGENI
+
+Lista allergeni elencati nel Reg. CE 1169/2011 $Р | МО
+Cereali contenenti glutine (cioé grano, segale, orzo, ауепа, farro, Кати! о i loro серр! ibridati) е х
+prodotti derivati
+
+Crostacei e prodotti a base di crostacei. х
+Uova е prodotti a base di иома. х
+Pesce е prodotti а base di резсе х
+Arachidi e prodotti а base di arachidi. х
+Soia e prodotti a Базе di soia x
+Latte e prodotti a base di latte (incluso lattosio) х
+Frutta а guscio, сюе mandorle (Amygdalus communis L.), nocciole (Corylus avellana), пос!
+comuni (Juglans regia), noci di anacardi (Anacardium occidentale), noci di pecan (Carya x
+illinoiesis (Wangenh.) K. Koch), noci del Brasile (Bertholletia excelsa), pistacchi (Pistacia vera),
+
+noci del Queensland (Macadamia ternifolia) e prodotti derivati
+
+Sedano e prodotti a base di sedano. х
+Senape е prodotti a base di senape. х
+Semi di sesamo e prodotti а base di semi di sesamo. х
+Aniaride solforosa e solfiti т concentrazioni superiori а 10 mg/kg о 10 mg/l espressi come x
+Lupini e prodotti a base di lupini. х
+Molluschi e prodotti а base di molluschi. х
+
+DICHIARAZIONE О.С.М. || prodotto поп contiene е поп é stato ottenuto da
+Organismi Geneticamente Modificati in accordo
+coni Reg. СЕ п. 1829/2003 е п. 1830/2003.

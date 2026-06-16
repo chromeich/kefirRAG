@@ -1,0 +1,345 @@
+Source PDF: spec_downloader/syromaniya/pdfs/Спецификация BMB SPEZIATO.pdf
+OCR: tesseract rus+eng, 200 DPI
+
+===== PAGE 1 =====
+
+--- PyMuPDF text ---
+Scheda tecnica: SPEZIATO/R00-22 
+                                                                                                                                                                Data ultima revisione: 01/09/2022 
+                                                                                                                                       
+  
+ 
+ 
+ 
+ 
+ 
+ 
+                           BMB SRL – Via Muzza Spadetta, 43 - 40053 Loc. Bazzano - VALSAMOGGIA (BO)  
+Tel.: +39 051 0471599 – Fax: +39 051 0471175 - E-mail: info@bmb-srl.com P.IVA e CF. 629581202 
+ 
+1 
+ 
+NOME PRODOTTO 
+SPEZIATO 
+Descrizione del prodotto 
+ 
+                
+Coltura di ceppi selezionati contenenti Streptococcus thermophilus, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp 
+lactis, Lactobacillus paracasei per l’inoculo diretto del latte per la produzione lattiero-casearia. 
+ 
+Funzione e caratteristiche 
+Coltura di ceppi di fermenti selezionati e combinati per rispondere a specifiche esigenze tecnologiche, indicati per la produzione 
+di formaggio speziato 
+- 
+ATTIVITA’ FERMENTATIVA    ●●●○ 
+- 
+PRODUZIONE DI GAS             / 
+- 
+PRODUZIONE DI AROMA      ●●●○ 
+ 
+Istruzioni per l’uso 
+Aprire la busta e versarne il contenuto direttamente nel latte in lavorazione, mescolare lentamente per almeno 10 minuti al 
+fine di assicurarne una distribuzione uniforme del fermento. 
+ 
+Dosaggio 
+ 
+I dosaggi indicati sono da considerarsi una linea guida e potrebbero variare in funzione della tecnologia applicata e delle 
+proprietà desiderate per il prodotto in lavorazione.  
+DOSAGGIO INDICATIVO                    1U/100 litri di latte                      
+Specifiche Tecniche 
+  
+Specifiche microbiologiche: 
+     Enterobatteri                                 <10 ufc/g                                                     
+    Stafilococchi coagulasi positivi    <10 ufc/g                                                        
+    Muffe                                               <10 ufc/g                                                        
+    Lieviti                                                <10 ufc/g                                                        
+Anaerobi solfito riduttori              <10 ufc/g                                                        
+    Listeria monocytogenes                assente in 25g 
+   Salmonella spp                                 assente in 25 g 
+ 
+Specifiche chimiche: 
+    Piombo                  <0,020 mg/Kg 
+    Mercurio               <0,1 mg/Kg 
+    Cadmio                  <0,010 mg/Kg 
+ 
+Le analisi di laboratorio sono condotte secondo il piano dei controlli stabilito nel nostro manuale di autocontrollo. Ogni lotto di 
+prodotto è corredato da un giudizio di conformità espresso in base alla risultanza delle verifiche effettuate sul processo 
+produttivo e sul prodotto finito.
+
+--- Tesseract OCR ---
+|МСАЕОТЕМТ! ALIMENTARI
+
+7) |
+
+SAL
+
+Scheda tecnica: SPEZIATO/ROO-22
+Data ultima revisione: 01/09/2022
+
+NOME PRODOTTO
+
+SPEZIATO
+
+Descrizione del prodotto
+
+Coltura di ceppi selezionati contenenti Streptococcus thermophilus, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp
+lactis, Lactobacillus paracasei per l’inoculo diretto del latte per la produzione lattiero-casearia.
+
+Funzione e caratteristiche
+
+Coltura di ceppi di fermenti selezionati e combinati per rispondere a specifiche esigenze tecnologiche, indicati per la produzione
+di formaggio speziato
+
+-  ATTIVITA’ FERMENTATIVA eeeo
+- | PRODUZIONE DI GAS /
+- PRODUZIONE 0! АКОМА eeeo
+
+Istruzioni per Гизо
+
+Aprire la busta e versarne il contenuto direttamente nel latte in lavorazione, mescolare lentamente per almeno 10 minuti al
+fine di assicurarne una distribuzione uniforme del fermento.
+
+Dosaggio
+| dosaggi indicati sono da considerarsi una linea guida e potrebbero variare in funzione della tecnologia applicata e delle
+proprieta desiderate per il prodotto in lavorazione.
+
+DOSAGGIO INDICATIVO 1U/100 litri di latte
+
+Specifiche Tecniche
+
+Specifiche microbiologiche:
+
+Enterobatteri <10 ufc/g
+Stafilococchi coagulasi positivi <10 ufc/g
+Muffe <10 ufc/g
+Lieviti <10 ufc/g
+Anaerobi solfito riduttori <10 ufc/g
+Listeria monocytogenes assente in 25g
+Salmonella spp assente т 25 9
+
+Specifiche chimiche:
+
+Piombo <0,020 mg/Kg
+Mercurio <0,1 mg/Kg
+Cadmio <0,010 mg/Kg
+
+Le analisi di laboratorio sono condotte secondo il piano dei controlli stabilito nel nostro manuale di autocontrollo. Ogni lotto di
+prodotto ё corredato da un giudizio di conformita espresso in base alla risultanza delle verifiche effettuate sul processo
+produttivo e sul prodotto finito.
+
+ВМВ SRL - Via Muzza Spadetta, 43 - 40053 Loc. Bazzano - VALSAMOGGIA (BO)
+Tel.: +39 051 0471599 — Fax: +39 051 0471175 - E-mail: info@bmb-srl.com P.IVA e CF. 629581202
+
+===== PAGE 2 =====
+
+--- PyMuPDF text ---
+Scheda tecnica: SPEZIATO/R00-22 
+                                                                                                                                                                Data ultima revisione: 01/09/2022 
+                                                                                                                                       
+  
+ 
+ 
+ 
+ 
+ 
+ 
+                           BMB SRL – Via Muzza Spadetta, 43 - 40053 Loc. Bazzano - VALSAMOGGIA (BO)  
+Tel.: +39 051 0471599 – Fax: +39 051 0471175 - E-mail: info@bmb-srl.com P.IVA e CF. 629581202 
+ 
+2 
+ 
+NOME PRODOTTO 
+SPEZIATO 
+Conservazione 
+Il prodotto per le sue caratteristiche di attività dell’acqua (aW) è stabile e non necessita di trasporto refrigerato. Lo stoccaggio a 
+temperatura refrigerata contribuisce a garantire la durata indicata. 
+ 
+Shelf life 
+18 mesi dal confezionamento se conservato nelle condizioni di stoccaggio indicate. 
+ 
+ 
+Packaging 
+ 
+ 
+Bustine in alluminio poliaccoppiato termosaldate. Imballaggio conforme al D.M. 21/03/1973 e succ.mod.; Reg.CE 1935/2004 e 
+succ.mod.; Reg.CE 2023/2006 e succ.mod.; Reg.CE 10/2011 e succ.mod. 
+ 
+Etichettatura 
+Sono indicate le seguenti diciture: Nome del prodotto con il dosaggio (U), numero di lotto, shelf life (TMC  termine minimo di 
+conservazione), temperatura per lo stoccaggio, ragione sociale e sede dello stabilimento di produzione e confezionamento, 
+numero di riconoscimento IT 08 050 CE. 
+ 
+Dichiarazione allergeni 
+In conformità al Reg. UE 1169/2011 e succ.mod.: 
+ 
+Allergeni 
+SI 
+NO 
+Cereali contenenti glutine (grano, segale, orzo, avena, farro, kamut o i loro ceppi ibridati)  
+ 
+X 
+Crostacei e prodotti a base di crostacei 
+ 
+        X 
+Uova e prodotti a base di uova 
+ 
+X 
+Pesce e prodotti a base di pesce 
+ 
+X 
+Arachidi e prodotti a base di arachidi 
+ 
+X 
+Soia e prodotti a base di soia 
+ 
+X 
+Latte e prodotti a base di latte (incluso lattosio) 
+X 
+ 
+Frutta a guscio (mandorle (Amygdalus communis L.), nocciole (Corylus avellana), noci comuni (Juglans 
+regia), noci di anacardi (Anacardium occidentale), noci di pecan (Carya illinoiesis (Wangenh.) K. Koch), 
+noci del Brasile (Bertholletia excelsa), pistacchi (Pistacia vera), noci del Queensland (Macadamia 
+ternifolia) e prodotti derivati 
+ 
+X 
+Sedano e prodotti a base di sedano 
+ 
+X
+
+--- Tesseract OCR ---
+|МСАЕОТЕМТ! ALIMENTARI
+
+7) |
+
+SAL
+
+Scheda tecnica: SPEZIATO/ROO-22
+Data ultima revisione: 01/09/2022
+
+NOME PRODOTTO
+
+SPEZIATO
+
+Conservazione
+Il prodotto per le sue caratteristiche di attivita dell’acqua (aW) é stabile e non necessita di trasporto refrigerato. Lo stoccaggio a
+temperatura refrigerata contribuisce a garantire la durata indicata.
+
+Shelf life
+18 mesi dal confezionamento se conservato nelle condizioni di stoccaggio indicate.
+
+Packaging
+Bustine in alluminio poliaccoppiato termosaldate. Imballaggio conforme al D.M. 21/03/1973 e succ.mod.; Reg.CE 1935/2004 e
+succ.mod.; Reg.CE 2023/2006 e succ.mod.; Reg.CE 10/2011 e succ.mod.
+
+Etichettatura
+
+Sono indicate le seguenti diciture: Nome del prodotto con il dosaggio (U), numero di lotto, shelf life (TMC termine minimo di
+conservazione), temperatura per lo stoccaggio, ragione sociale e sede dello stabilimento di produzione e confezionamento,
+numero di riconoscimento IT 08 050 CE.
+
+Dichiarazione allergeni
+In conformita al Reg. UE 1169/2011 e succ.mod.:
+
+Allergeni $ NO
+Cereali contenenti glutine (grano, segale, orzo, avena, farro, kamut o i loro ceppi ibridati) Хх
+Crostaceie prodotti а Базе di crostacei Хх
+Uova е prodotti а base di uova Хх
+Pesce e prodotti а base di pesce Хх
+Arachidi e prodotti а Базе di arachidi Хх
+Soia е prodotti а base а! soia Хх
+Latte e prodotti а base di latte (incluso lattosio) Хх
+
+Frutta а дизсю (mandorle (Amygdalus communis L.), nocciole (Corylus avellana), пос! comuni (Juglans Хх
+regia), пос! di апасага! (Anacardium occidentale), пос! di pecan (Carya illinoiesis (Wangenh.) К. Koch),
+
+noci del Brasile (Bertholletia excelsa), pistacchi (Pistacia vera), noci del Queensland (Macadamia
+
+ternifolia) e prodotti derivati
+
+Sedanoe prodotti a base di sedano Хх
+
+ВМВ SRL — Via Muzza Spadetta, 43 - 40053 Loc. Bazzano - VALSAMOGGIA (BO)
+Tel.: +39 051 0471599 — Fax: +39 051 0471175 - E-mail: info@bmb-srl.com P.IVA e CF. 629581202
+
+===== PAGE 3 =====
+
+--- PyMuPDF text ---
+Scheda tecnica: SPEZIATO/R00-22 
+                                                                                                                                                                Data ultima revisione: 01/09/2022 
+                                                                                                                                       
+  
+ 
+ 
+ 
+ 
+ 
+ 
+                           BMB SRL – Via Muzza Spadetta, 43 - 40053 Loc. Bazzano - VALSAMOGGIA (BO)  
+Tel.: +39 051 0471599 – Fax: +39 051 0471175 - E-mail: info@bmb-srl.com P.IVA e CF. 629581202 
+ 
+3 
+ 
+NOME PRODOTTO 
+SPEZIATO 
+Senape e prodotti a base di senape 
+ 
+X 
+Semi di sesamo e prodotti a base di semi di sesamo 
+ 
+X 
+Anidride solforosa e solfiti in concentrazioni > 10 mg/kg come SO2 
+ 
+X 
+Lupini e prodotti a base di lupini 
+ 
+X 
+Molluschi e prodotti a base di molluschi 
+ 
+X 
+OGM 
+Il prodotto non contiene e non è stato ottenuto da organismi geneticamente modificati; il prodotto è conforme alle norme 
+vigenti in materia di alimenti  modificati geneticamente Reg. CE 1829/2003 e Reg.CE 1830/2003. 
+ 
+Origine materie prime 
+Le materie prime hanno origine in Comunità Europea. 
+ 
+Le informazioni contenute nella presente scheda tecnica sono basate sul nostro lavoro di ricerca e sviluppo e sono frutto delle 
+nostre migliori conoscenze.  
+Non essendo sotto nostro controllo le condizioni operative applicate dal cliente, non siamo responsabili di formulazioni, 
+condizioni di rischio ed obblighi derivanti dall’uso del nostro prodotto.  
+L’utilizzatore è responsabile nell’osservare le norme legali che regolano l’uso del prodotto; le dichiarazioni qui contenute non 
+devono essere considerate come garanzia di alcun tipo.
+
+--- Tesseract OCR ---
+|МСАЕОТЕМТ! ALIMENTARI
+
+7) |
+
+SAL
+Scheda tecnica: SPEZIATO/ROO-22
+Data ultima revisione: 01/09/2022
+NOME PRODOTTO
+Senape e prodotti a base di senape Хх
+Semi di sesamoe prodotti а base di semi di sesamo Хх
+Anidride solforosa е solfiti т concentrazioni > 10 mg/kg come SO, Хх
+Lupinie prodotti а base di lupini Хх
+Molluschie prodotti а base di molluschi Хх
+
+OGM
+Il prodotto non contiene e non é stato ottenuto da organismi geneticamente modificati; il prodotto ё conforme alle norme
+vigenti in materia di alimenti modificati geneticamente Reg. CE 1829/2003 e Reg.CE 1830/2003.
+
+Origine materie prime
+Le materie prime hanno origine in Comunita Europea.
+
+Le informazioni contenute nella presente scheda tecnica sono basate sul nostro lavoro di ricerca e sviluppo e sono frutto delle
+nostre migliori conoscenze.
+
+Non essendo sotto nostro controllo le condizioni operative applicate dal cliente, non siamo responsabili di formulazioni,
+condizioni di rischio ed obblighi derivanti dall’uso del nostro prodotto.
+
+L’utilizzatore 6 responsabile nell’osservare le norme legali che regolano Гизо del prodotto; le dichiarazioni qui contenute non
+devono essere considerate come garanzia di alcun tipo.
+
+ВМВ SRL - Via Muzza Spadetta, 43 - 40053 Loc. Bazzano - VALSAMOGGIA (BO)
+Tel.: +39 051 0471599 — Fax: +39 051 0471175 - E-mail: info@bmb-srl.com P.IVA e CF. 629581202

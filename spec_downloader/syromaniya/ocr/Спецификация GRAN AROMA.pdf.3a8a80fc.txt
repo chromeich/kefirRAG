@@ -1,0 +1,265 @@
+Source PDF: spec_downloader/syromaniya/pdfs/Спецификация GRAN AROMA.pdf
+OCR: tesseract rus+eng, 200 DPI
+
+===== PAGE 1 =====
+
+--- PyMuPDF text ---
+INFORMAZIONI 
+Fermenti lattici concentrati per l’inoculo diretto nel latte 
+ 
+APPLICAZIONE 
+Colture starter specifiche per la caseificazione, perfette per produrre formaggi semicotti dalla 
+spiccata intensità aromatica 
+ 
+COMPOSIZIONE 
+La miscela contiene ceppi di Streptococcus Thermophilus, Lactobacillus delbruekii subsp 
+bulgaricus, Lactococcus lactis subsp.lactis 
+ 
+ 
+ATTIVITA’ 
+- FERMENTATIVA  ++++ 
+- PRODUZIONE DI GAS / 
+- PRODUZIONE DI AROMA  ++++ 
+ 
+ 
+PROPRIETA’  
+ 
+MICROBIOLOGICHE  
+Enterobatteriacee  
+ 
+< 10 ufc/g 
+ 
+ 
+ 
+ 
+ 
+ 
+Stafilococchi Coagulasi positivi 
+< 10 ufc/g 
+ 
+ 
+ 
+ 
+ 
+Muffe 
+ 
+ 
+ 
+< 50 ufc/g 
+ 
+ 
+ 
+ 
+ 
+Lieviti 
+ 
+ 
+ 
+< 50 ufc/g 
+ 
+ 
+ 
+ 
+ 
+Listeria  monocytogenes 
+ 
+Assente /25 g 
+ 
+ 
+ 
+ 
+ 
+Salmonelle spp 
+ 
+ 
+Assente /25 g 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+CONFEZIONE 
+ 
+Bustine in alluminio poliaccoppiato idoneo al contatto con gli alimenti 
+ 
+CONSERVAZIONE 
+La coltura va conservata a temperatura inferiore a 4°C; tale stoccaggio garantisce la shelf-life 
+almeno fino alla data indicata in etichetta. 
+ 
+ISTRUZIONI D’USO 
+Versare il contenuto della busta direttamente nel latte in caldaia e mescolare lentamente. 
+Agitare la miscela per 10-15 minuti affinché la coltura possa distribuirsi in maniera uniforme.  
+ 
+DOSAGGIO 
+1U ogni 100 litri di latte 
+3U ogni 300 litri di latte 
+10U ogni 1000 litri di latte  
+50U ogni 5000 litri di latte 
+ 
+ 
+ 
+ROTAZIONI 
+ 
+DISPONIBILI 
+ 
+PAESE DI ORIGINE  
+Italia 
+ 
+GRAN AROMA+
+
+--- Tesseract OCR ---
+INFORMAZIONI
+
+APPLICAZIONE
+
+COMPOSIZIONE
+
+PROPRIETA’
+MICROBIOLOGICHE
+
+CONFEZIONE
+
+CONSERVAZIONE
+
+ISTRUZIONI D’USO
+
+DOSAGGIO
+
+ROTAZIONI
+DISPONIBILI
+
+PAESE DI ORIGINE
+
+GRAN AROMA+
+
+Fermenti (ас! concentrati per Vinoculo diretto nel latte
+
+Colture starter specifiche per la caseificazione, perfette per produrre formaggi semicotti dalla
+spiccata intensita aromatica
+
+La miscela contiene ceppi di Streptococcus Thermophilus, Lactobacillus delbruekii subsp
+bulgaricus, Lactococcus lactis subsp.lactis
+
+ATTIVITA’
+
+- FERMENTATIVA ++++
+
+- PRODUZIONE DI GAS/
+
+- PRODUZIONE DIAROMA ++++
+
+Enterobatteriacee < 10 ufc/g
+Stafilococchi Coagulasi positivi < 10 ufc/g
+Muffe < 50 ufc/g
+Lieviti < 50 ufc/g
+Listeria monocytogenes Assente /25 g
+Salmonelle spp Assente /25 g
+
+Bustine in alluminio poliaccoppiato idoneo al contatto con gli alimenti
+
+La coltura va conservata a temperatura inferiore a 4°C; tale stoccaggio garantisce la shelf-life
+almeno fino alla data indicata in etichetta.
+
+Versare il contenuto della busta direttamente nel latte in caldaia e mescolare lentamente.
+Agitare la miscela per 10-15 minuti affinché la coltura possa distribuirsi in maniera uniforme.
+
+1U ogni 100 litri di latte
+3U ogni 300 litri di latte
+10U ogni 1000 litri di latte
+50U ogni 5000 litri di latte
+
+Italia
+
+===== PAGE 2 =====
+
+--- PyMuPDF text ---
+DICHIARAZIONE ALLERGENI 
+ 
+Lista allergeni elencati nel Reg. CE 1169/2011 
+SI’ NO 
+Cereali contenenti glutine (cioè grano, segale, orzo, avena, farro, kamut o i loro ceppi ibridati) e prodotti 
+derivati 
+ 
+X 
+Crostacei e prodotti a base di crostacei. 
+ 
+X 
+Uova e prodotti a base di uova. 
+ 
+X 
+Pesce e prodotti a base di pesce 
+ 
+X 
+Arachidi e prodotti a base di arachidi. 
+ 
+X 
+Soia e prodotti a base di soia 
+ 
+X 
+Latte e prodotti a base di latte (incluso lattosio) 
+X 
+ 
+Frutta a guscio, cioè mandorle (Amygdalus communis L.), nocciole (Corylus avellana), noci comuni (Juglans 
+regia), noci di anacardi (Anacardium occidentale), noci di pecan (Carya illinoiesis (Wangenh.) K. Koch), noci 
+del Brasile (Bertholletia excelsa), pistacchi (Pistacia vera), noci del Queensland (Macadamia ternifolia) e 
+prodotti derivati 
+ 
+X 
+Sedano e prodotti a base di sedano. 
+ 
+X 
+Senape e prodotti a base di senape. 
+ 
+X 
+Semi di sesamo e prodotti a base di semi di sesamo. 
+ 
+X 
+Anidride solforosa e solfiti in concentrazioni superiori a 10 mg/kg o 10 mg/l espressi come SO2. 
+ 
+X 
+Lupini e prodotti a base di lupini. 
+ 
+X 
+Molluschi e prodotti a base di molluschi. 
+ 
+X 
+ 
+DICHIARAZIONE O.G.M. 
+Il prodotto non contiene e non è stato ottenuto da  
+Organismi Geneticamente Modificati in accordo  
+con i Reg. CE n. 1829/2003 e n. 1830/2003.
+
+--- Tesseract OCR ---
+DICHIARAZIONE ALLERGENI
+
+Lista allergeni elencati nel Reg. CE 1169/2011 $Р | МО
+Cereali contenenti glutine (cioé grano, segale, orzo, avena, ито, kamut о i loro серр! ibridati) e prodotti х
+derivati
+
+Crostacei e prodotti а base di crostacei. x
+Uova e prodotti a base di uova. x
+Pesce e prodotti а base di pesce x
+Arachidi e prodotti a base di arachidi. x
+Soia e prodotti a base di soia x
+Latte e prodotti a base di latte (incluso lattosio) x
+Frutta a guscio, cioé mandorle (Amygdalus communis L.), nocciole (Corylus avellana), пос! comuni (Juglans
+
+regia), noci di anacardi (Anacardium occidentale), noci di pecan (Carya illinoiesis (Wangenh.) K. Koch), noci х
+del Brasile (Bertholletia excelsa), pistacchi (Pistacia vera), пос! del Queensland (Macadamia ternifolia) е
+prodotti derivati
+
+Sedano e prodotti a base di sedano. x
+Senape e prodotti a base di senape. x
+Semi di sesamo e prodotti a base di semi di sesamo. x
+Anidride solforosa е solfiti in concentrazioni superiori a 10 mg/kg о 10 mg/l espressi come SO2. х
+Lupini e prodotti а base di lupini. x
+Molluschi e prodotti a base di molluschi. x
+
+DICHIARAZIONE O.G.M. Il prodotto non contiene е non é stato ottenuto da
+Organismi Geneticamente Modificati in accordo
+con i Reg. СЕ п. 1829/2003 е п. 1830/2003.
