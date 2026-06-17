@@ -1,0 +1,20 @@
+Lactobacillus acidophilus
+Lactobacillus casei
+Lactobacillus casei subsp. rhamnosus
+Lactobacillus delbrueckii
+Lactobacillus delbrueckii subsp. bulgaricus
+Lactobacillus fermentum
+Lactobacillus helveticus
+Lactobacillus plantarum
+Lactobacillus rhamnosus
+Lactococcus lactis
+Lactococcus lactis subsp. cremoris
+Lactococcus lactis subsp. diacetylactis
+Lactococcus lactis subsp. lactis
+Lactococcus lactis subsp. lactis biovar diacetylactis
+Leuconostoc
+Leuconostoc lactis
+Leuconostoc mesenteroides subsp. cremoris
+Propionibacterium freudenreichii
+Propionibacterium freudenreichii subsp. shermanii
+Streptococcus thermophilus

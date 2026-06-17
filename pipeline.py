@@ -19,6 +19,11 @@ Examples:
         --openalex-key YOUR_OPENALEX_KEY \
         --core-key YOUR_CORE_KEY
 
+    python3 pipeline.py \
+        --query-url 'https://api.openalex.org/works?search.title_and_abstract=milk+fermentation&per_page=25' \
+        --max-results 25 \
+        --email you@example.com
+
 PDFs and the JSON report are saved under <out-dir>/<query-name>/.
 
 Unpaywall requires a real email. OpenAlex may require an API key. CORE requires
@@ -43,7 +48,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterator
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
@@ -1372,6 +1377,21 @@ def openalex_page_size(value: str) -> int:
     return number
 
 
+def query_from_openalex_url(url: str) -> tuple[str, int | None]:
+    parts = urlsplit(url)
+    params = parse_qs(parts.query)
+    queries = params.get(OPENALEX_SEARCH_PARAM)
+    if not queries or not queries[0].strip():
+        raise argparse.ArgumentTypeError(f"--query-url must include `{OPENALEX_SEARCH_PARAM}`")
+
+    page_size: int | None = None
+    per_page_values = params.get("per_page")
+    if per_page_values and per_page_values[0].strip():
+        page_size = openalex_page_size(per_page_values[0])
+
+    return queries[0], page_size
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Find OA article PDFs through OpenAlex, SciBban, Unpaywall, Europe PMC and CORE.",
@@ -1379,8 +1399,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "query",
         nargs="?",
-        default=DEFAULT_QUERY,
+        default=None,
         help="Article title/search query.",
+    )
+    parser.add_argument(
+        "--query-url",
+        default=None,
+        help=f"OpenAlex /works URL. The `{OPENALEX_SEARCH_PARAM}` parameter is used as the query.",
     )
     parser.add_argument(
         "--email",
@@ -1431,7 +1456,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Search and write metadata, but do not download PDFs.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.query_url:
+        try:
+            args.query, url_page_size = query_from_openalex_url(args.query_url)
+        except argparse.ArgumentTypeError as exc:
+            parser.error(str(exc))
+        if url_page_size is not None and args.page_size == DEFAULT_PAGE_SIZE:
+            args.page_size = url_page_size
+    elif args.query is None:
+        args.query = DEFAULT_QUERY
+
+    return args
 
 
 def main() -> int:

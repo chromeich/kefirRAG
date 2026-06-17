@@ -1,0 +1,43 @@
+OpenAlex title/abstract query:
+
+(
+  "Lactobacillus acidophilus"
+  OR "Lactobacillus casei"
+  OR "Lactobacillus casei subsp. rhamnosus"
+  OR "Lactobacillus delbrueckii"
+  OR "Lactobacillus delbrueckii subsp. bulgaricus"
+  OR "Lactobacillus fermentum"
+  OR "Lactobacillus helveticus"
+  OR "Lactobacillus plantarum"
+  OR "Lactobacillus rhamnosus"
+  OR "Lactococcus lactis"
+  OR "Lactococcus lactis subsp. cremoris"
+  OR "Lactococcus lactis subsp. diacetylactis"
+  OR "Lactococcus lactis subsp. lactis"
+  OR "Lactococcus lactis subsp. lactis biovar diacetylactis"
+  OR "Leuconostoc"
+  OR "Leuconostoc lactis"
+  OR "Leuconostoc mesenteroides subsp. cremoris"
+  OR "Propionibacterium freudenreichii"
+  OR "Propionibacterium freudenreichii subsp. shermanii"
+  OR "Streptococcus thermophilus"
+)
+AND
+(
+  dairy
+  OR milk
+  OR cheese
+  OR yogurt
+  OR yoghurt
+  OR kefir
+  OR "starter culture"
+  OR fermentation
+)
+
+OpenAlex API URL template:
+
+https://api.openalex.org/works?search.title_and_abstract=%28%22Lactobacillus+acidophilus%22+OR+%22Lactobacillus+casei%22+OR+%22Lactobacillus+casei+subsp.+rhamnosus%22+OR+%22Lactobacillus+delbrueckii%22+OR+%22Lactobacillus+delbrueckii+subsp.+bulgaricus%22+OR+%22Lactobacillus+fermentum%22+OR+%22Lactobacillus+helveticus%22+OR+%22Lactobacillus+plantarum%22+OR+%22Lactobacillus+rhamnosus%22+OR+%22Lactococcus+lactis%22+OR+%22Lactococcus+lactis+subsp.+cremoris%22+OR+%22Lactococcus+lactis+subsp.+diacetylactis%22+OR+%22Lactococcus+lactis+subsp.+lactis%22+OR+%22Lactococcus+lactis+subsp.+lactis+biovar+diacetylactis%22+OR+%22Leuconostoc%22+OR+%22Leuconostoc+lactis%22+OR+%22Leuconostoc+mesenteroides+subsp.+cremoris%22+OR+%22Propionibacterium+freudenreichii%22+OR+%22Propionibacterium+freudenreichii+subsp.+shermanii%22+OR+%22Streptococcus+thermophilus%22%29+AND+%28dairy+OR+milk+OR+cheese+OR+yogurt+OR+yoghurt+OR+kefir+OR+%22starter+culture%22+OR+fermentation%29&per_page=25
+
+Pipeline command:
+
+python3 pipeline.py --query-url 'https://api.openalex.org/works?search.title_and_abstract=%28%22Lactobacillus+acidophilus%22+OR+%22Lactobacillus+casei%22+OR+%22Lactobacillus+casei+subsp.+rhamnosus%22+OR+%22Lactobacillus+delbrueckii%22+OR+%22Lactobacillus+delbrueckii+subsp.+bulgaricus%22+OR+%22Lactobacillus+fermentum%22+OR+%22Lactobacillus+helveticus%22+OR+%22Lactobacillus+plantarum%22+OR+%22Lactobacillus+rhamnosus%22+OR+%22Lactococcus+lactis%22+OR+%22Lactococcus+lactis+subsp.+cremoris%22+OR+%22Lactococcus+lactis+subsp.+diacetylactis%22+OR+%22Lactococcus+lactis+subsp.+lactis%22+OR+%22Lactococcus+lactis+subsp.+lactis+biovar+diacetylactis%22+OR+%22Leuconostoc%22+OR+%22Leuconostoc+lactis%22+OR+%22Leuconostoc+mesenteroides+subsp.+cremoris%22+OR+%22Propionibacterium+freudenreichii%22+OR+%22Propionibacterium+freudenreichii+subsp.+shermanii%22+OR+%22Streptococcus+thermophilus%22%29+AND+%28dairy+OR+milk+OR+cheese+OR+yogurt+OR+yoghurt+OR+kefir+OR+%22starter+culture%22+OR+fermentation%29&per_page=25' --max-results 25 --email you@example.com

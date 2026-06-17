@@ -1,0 +1,142 @@
+[
+  {
+    "ingredient": "Lactobacillus acidophilus",
+    "source_count": 1,
+    "sources": "uglich-molochnaya-produkciya.pdf",
+    "variants": "Lactobacillus acidophilus",
+    "sample_context": "микрофлоры концентрата Назначение концентрата Наименование вида (подвида) микроорганизмов Буквенное обозначение 1 2 3 4 Моновидовые концентраты БК-Углич-АВ Lactobacillus acidophilus"
+  },
+  {
+    "ingredient": "Lactobacillus casei",
+    "source_count": 3,
+    "sources": "Спецификация Alce LYOBAC-D DHC.pdf; Спецификация MicroMilk PR С.pdf; Спецификация Sacco LC4P1.pdf",
+    "variants": "Lactobacillus casei",
+    "sample_context": "Lactococcus lactis subsp. lactis, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp. lactis biovar diacetylactis, Leuconostoc mesenteroides subsp. cremoris, Streptococcus thermophilus, Lactobacillus casei, Lactobacillus helveticus"
+  },
+  {
+    "ingredient": "Lactobacillus casei subsp. rhamnosus",
+    "source_count": 1,
+    "sources": "Спецификация Biochem LPR.pdf",
+    "variants": "Lactobacillus casei subsp. rhamnosus",
+    "sample_context": "Lactobacillus plantarum, Lactobacillus casei subsp. rhamnosus обладает фаговой резистентностью."
+  },
+  {
+    "ingredient": "Lactobacillus delbrueckii",
+    "source_count": 4,
+    "sources": "Спецификация Danisco LH 100.pdf; Спецификация Danisco TM 81.pdf; Спецификация Sacco Y 082 B.pdf; Спецификация Sacco YHL 092 F.pdf",
+    "variants": "Lactobacillus delbrueckii",
+    "sample_context": "Lactobacillus delbrueckii подвид lactis Lactobacillus helveticus"
+  },
+  {
+    "ingredient": "Lactobacillus delbrueckii subsp. bulgaricus",
+    "source_count": 12,
+    "sources": "YF-L812_FD_PI_RUS.pdf; Спецификация Alce LYOBAC-D YOYO.pdf; Спецификация Biochem SLBH.pdf; Спецификация Hansen CO-03.pdf; Спецификация Hansen Lb-12.pdf; Спецификация Hansen SA 500.pdf; Спецификация Hansen TCC-3.pdf; Спецификация MicroMilk YO 100.pdf; Спецификация MicroMilk YO 110.pdf; Спецификация MicroMilk YO 40.pdf; Спецификация MicroMilk YO Н20.pdf; Спецификация MicroMilk ТМ 110.pdf",
+    "variants": "Lactobacillus bulgaricus; Lactobacillus delbrueckii ssp. Bulgaricus; Lactobacillus delbrueckii ssp. bulgaricus; Lactobacillus delbrueckii subsp bulgaricus; Lactobacillus delbrueckii subsp. bulgaricus; Lactobacillus delbruekii subsp. bulgaricus",
+    "sample_context": "Lactobacillus delbrueckii subsp bulgaricus Streptococcus thermophilus"
+  },
+  {
+    "ingredient": "Lactobacillus fermentum",
+    "source_count": 1,
+    "sources": "Спецификация Sacco LF 55.pdf",
+    "variants": "Lactobacillus fermentum",
+    "sample_context": "В состав лиофилизированной культуры прямого внесения Lyofast LF 55 входит штамм Lactobacillus fermentum."
+  },
+  {
+    "ingredient": "Lactobacillus helveticus",
+    "source_count": 14,
+    "sources": "Спецификация Alce LYOBAC-D DHC.pdf; Спецификация Alce LYOBAC-D HELVETICUS.pdf; Спецификация Alce LYOBAC-D THBR.pdf; Спецификация Biochem SLBH.pdf; Спецификация Danisco LH 100.pdf; Спецификация Hansen CO-03.pdf; Спецификация Hansen LH-B02.pdf; Спецификация Hansen RSF-742.pdf; Спецификация Hansen SA 500.pdf; Спецификация Hansen TCC-20.pdf; Спецификация MicroMilk PR 1.pdf; Спецификация MicroMilk YO Н20.pdf; Спецификация MicroMilk ТТ H30.pdf; Спецификация MicroMilk ТТ HL.pdf",
+    "variants": "Lactobacillus helveticus",
+    "sample_context": "Lactococcus lactis subsp. lactis, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp. lactis biovar diacetylactis, Leuconostoc mesenteroides subsp. cremoris, Streptococcus thermophilus, Lactobacillus casei, Lactobacillus helveticus"
+  },
+  {
+    "ingredient": "Lactobacillus plantarum",
+    "source_count": 3,
+    "sources": "Спецификация Biochem LP.pdf; Спецификация Biochem LPR.pdf; Спецификация Sacco LPR-А.pdf",
+    "variants": "Lactobacillus Plantarum; Lactobacillus plantarum",
+    "sample_context": "Lactobacillus Plantarum обладает фаговой резистентностью."
+  },
+  {
+    "ingredient": "Lactobacillus rhamnosus",
+    "source_count": 2,
+    "sources": "Спецификация Danisco Holdbac YM-B.pdf; Спецификация Sacco LPR-А.pdf",
+    "variants": "Lactobacillus rhamnosus",
+    "sample_context": "Lactobacillus rhamnosus Propionibacterium freudenreichii subsp. shermanii"
+  },
+  {
+    "ingredient": "Lactococcus lactis",
+    "source_count": 18,
+    "sources": "Спецификация Biochem MSO.pdf; Спецификация Danisco BT 01.pdf; Спецификация Danisco MA 11 LYO.pdf; Спецификация Danisco MA 11.pdf; Спецификация Danisco MA 16.pdf; Спецификация Danisco MA 19.pdf; Спецификация Danisco MA 4001.pdf; Спецификация Danisco MM 101.pdf; Спецификация Danisco Probat 222.pdf; Спецификация Sacco M 031 N.pdf; Спецификация Sacco MO 030.pdf; Спецификация Sacco MO 031.pdf; Спецификация Sacco MO 032.pdf; Спецификация Sacco MOS 062.pdf; Спецификация Sacco MOT 092 EE.pdf; Спецификация Sacco MOT 094 EE.pdf; Спецификация Sacco MS 064 CP.pdf; Спецификация Sacco MT 096 FEN.pdf",
+    "variants": "Lactococcus lactis",
+    "sample_context": "Бактериальный состав культур Lactococcus lactis subsp."
+  },
+  {
+    "ingredient": "Lactococcus lactis subsp. cremoris",
+    "source_count": 16,
+    "sources": "Спецификация Alce LYOBAC-D DHC.pdf; Спецификация Alce LYOBAC-D TW.pdf; Спецификация Biochem MSO.pdf; Спецификация Biochem MSY.pdf; Спецификация Biochem MSЕ.pdf; Спецификация Hansen CHN-11.pdf; Спецификация Hansen CHN-19.pdf; Спецификация Hansen CHN-22.pdf; Спецификация Hansen Flora Danica.pdf; Спецификация Hansen MO-10.pdf; Спецификация Hansen R-704.pdf; Спецификация Hansen RSF-742.pdf; Спецификация Hansen XPL-30.pdf; Спецификация MicroMilk ММ 20.pdf; Спецификация MicroMilk ММ 30.pdf; Спецификация MicroMilk ММ 40.pdf",
+    "variants": "Lactococcus Lactis subsp. Cremoris; Lactococcus lactis ssp. Cremoris; Lactococcus lactis subsp cremoris; Lactococcus lactis subsp. cremoris",
+    "sample_context": "Lactococcus lactis subsp. lactis, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp. lactis biovar diacetylactis, Leuconostoc mesenteroides subsp. cremoris, Streptococcus thermophilus, Lactobacillus casei, Lactobacillus helveticus"
+  },
+  {
+    "ingredient": "Lactococcus lactis subsp. diacetylactis",
+    "source_count": 1,
+    "sources": "Спецификация Alce LYOBAC-D TW.pdf",
+    "variants": "Lactococcus lactis subsp. diacetilactis",
+    "sample_context": "Lactococcus lactis subsp. lactis, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp. diacetilactis, Leuconostoc mesenteroides subsp. cremoris"
+  },
+  {
+    "ingredient": "Lactococcus lactis subsp. lactis",
+    "source_count": 17,
+    "sources": "uglich-syry.pdf; Спецификация Alce LYOBAC-D DHC.pdf; Спецификация Alce LYOBAC-D TW.pdf; Спецификация Biochem MSO.pdf; Спецификация Biochem MSY.pdf; Спецификация Biochem MSЕ.pdf; Спецификация Hansen CHN-11.pdf; Спецификация Hansen CHN-19.pdf; Спецификация Hansen CHN-22.pdf; Спецификация Hansen Flora Danica.pdf; Спецификация Hansen MO-10.pdf; Спецификация Hansen R-704.pdf; Спецификация Hansen RSF-742.pdf; Спецификация Hansen XPL-30.pdf; Спецификация MicroMilk ММ 20.pdf; Спецификация MicroMilk ММ 30.pdf; Спецификация MicroMilk ММ 40.pdf",
+    "variants": "Lactococcus Lactis subsp. Lactis; Lactococcus lactis ssp. Lactis; Lactococcus lactis ssp. lactis; Lactococcus lactis subsp. lactis",
+    "sample_context": "микрофлоры концентрата Назначение концентрата Наименование вида (подвида) микроорганизмов Буквен- ное обозна- чение БК-Углич-№4Т Lactococcus lactis subsp. lactis Lac. lactis subsp. cremoris Lac. lactis subsp. diacetilactis Leuconostoc lactis и/или"
+  },
+  {
+    "ingredient": "Lactococcus lactis subsp. lactis biovar diacetylactis",
+    "source_count": 8,
+    "sources": "Спецификация Alce LYOBAC-D DHC.pdf; Спецификация Biochem MSЕ.pdf; Спецификация Hansen CHN-11.pdf; Спецификация Hansen CHN-19.pdf; Спецификация Hansen CHN-22.pdf; Спецификация Hansen Flora Danica.pdf; Спецификация MicroMilk ММ 20.pdf; Спецификация MicroMilk ММ 30.pdf",
+    "variants": "Lactococcus lactis ssp. Lactis biovar diacetylactis; Lactococcus lactis subsp. lactis biovar diacetilactis; Lactococcus lactis subsp. lactis biovar diacetylactis; Lactococcus lactis subsp. lactis biovar. diacetylactis",
+    "sample_context": "Lactococcus lactis subsp. lactis, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp. lactis biovar diacetylactis, Leuconostoc mesenteroides subsp. cremoris, Streptococcus thermophilus, Lactobacillus casei, Lactobacillus helveticus"
+  },
+  {
+    "ingredient": "Leuconostoc",
+    "source_count": 5,
+    "sources": "Спецификация Hansen CHN-11.pdf; Спецификация Hansen CHN-19.pdf; Спецификация Hansen CHN-22.pdf; Спецификация Hansen Flora Danica.pdf; Спецификация Sacco MW 030.pdf",
+    "variants": "Leuconostoc; Leuconostoc SPP; Leuconostoc spp",
+    "sample_context": "Lactococcus lactis subsp. cremoris Lactococcus lactis subsp. lactis biovar. diacetylactis Lactococcus lactis subsp. lactis Leuconostoc"
+  },
+  {
+    "ingredient": "Leuconostoc lactis",
+    "source_count": 1,
+    "sources": "uglich-syry.pdf",
+    "variants": "Leuconostoc lactis",
+    "sample_context": "микрофлоры концентрата Назначение концентрата Наименование вида (подвида) микроорганизмов Буквен- ное обозна- чение Моновидовые концентраты БК-Углич-Л Leuconostoc lactis и/или mesenteroides subsp. cremoris Б"
+  },
+  {
+    "ingredient": "Leuconostoc mesenteroides subsp. cremoris",
+    "source_count": 5,
+    "sources": "Спецификация Alce LYOBAC-D DHC.pdf; Спецификация Alce LYOBAC-D TW.pdf; Спецификация Biochem MSЕ.pdf; Спецификация MicroMilk ММ 20.pdf; Спецификация MicroMilk ММ LM.pdf",
+    "variants": "Leuconostoc mesenteroides subsp. Cemoris; Leuconostoc mesenteroides subsp. Cremoris; Leuconostoc mesenteroides subsp. cremoris; Leuconostoc mesentoiredes subsp cremoris",
+    "sample_context": "Lactococcus lactis subsp. lactis, Lactococcus lactis subsp. cremoris, Lactococcus lactis subsp. lactis biovar diacetylactis, Leuconostoc mesenteroides subsp. cremoris, Streptococcus thermophilus, Lactobacillus casei, Lactobacillus helveticus"
+  },
+  {
+    "ingredient": "Propionibacterium freudenreichii",
+    "source_count": 1,
+    "sources": "Спецификация Sacco PB 1.pdf",
+    "variants": "Propionibacterium freudenreichii",
+    "sample_context": "В состав Lyofast PB 1 входят отобранные штаммы Propionibacterium freudenreichii ssp."
+  },
+  {
+    "ingredient": "Propionibacterium freudenreichii subsp. shermanii",
+    "source_count": 4,
+    "sources": "Спецификация Alce PROPIONIBACTERIUM.pdf; Спецификация Danisco Eyes 2.pdf; Спецификация Danisco Holdbac YM-B.pdf; Спецификация Hansen PS-4.pdf",
+    "variants": "Propionibacterium freudenreichii subsp. shermanii; Propionibacterium shermanii",
+    "sample_context": "Propionibacterium shermanii"
+  },
+  {
+    "ingredient": "Streptococcus thermophilus",
+    "source_count": 35,
+    "sources": "YF-L812_FD_PI_RUS.pdf; Спецификация Alce LYOBAC-D DHC.pdf; Спецификация Alce LYOBAC-D MO.pdf; Спецификация Alce LYOBAC-D THBR.pdf; Спецификация Alce LYOBAC-D YOYO.pdf; Спецификация Biochem MSY.pdf; Спецификация Biochem SLBH.pdf; Спецификация Biochem М.pdf; Спецификация Danisco TA 45.pdf; Спецификация Danisco TA 52.pdf; Спецификация Danisco TA 61.pdf; Спецификация Danisco TM 81.pdf; Спецификация Hansen CO-03.pdf; Спецификация Hansen RSF-742.pdf; Спецификация Hansen SA 500.pdf; Спецификация Hansen STI-12.pdf; Спецификация Hansen STI-14.pdf; Спецификация Hansen TCC-20.pdf; Спецификация Hansen TCC-3.pdf; Спецификация Hansen XPL-30.pdf; Спецификация MicroMilk PR 1.pdf; Спецификация MicroMilk YO 110.pdf; Спецификация MicroMilk YO 40.pdf; Спецификация MicroMilk YO Н20.pdf; Спецификация MicroMilk ТМ 110.pdf; Спецификация MicroMilk ТТ 1.pdf; Спецификация MicroMilk ТТ H30.pdf; Спецификация Sacco MT 096 FEN.pdf; Спецификация Sacco ST 053.pdf; Спецификация Sacco ST 064.pdf; Спецификация Sacco ST 081.pdf; Спецификация Sacco ST 083.pdf; Спецификация Sacco ST 085.pdf; Спецификация Sacco Y 082 B.pdf; Спецификация Sacco YHL 092 F.pdf",
+    "variants": "Streptococcus Salivarius subsp. Thermophilus; Streptococcus Salivarus subsp. Thermophilus; Streptococcus salivarius spp. Thermophilus; Streptococcus salivarius subsp. thermophilus; Streptococcus thermophilus",
+    "sample_context": "Lactobacillus delbrueckii subsp bulgaricus Streptococcus thermophilus"
+  }
+]
