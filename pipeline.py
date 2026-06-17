@@ -85,6 +85,9 @@ REPOSITORY_MIRROR_HOST_PRIORITY = {
     "pmc.ncbi.nlm.nih.gov": 2,
     "www.ncbi.nlm.nih.gov": 2,
 }
+LOG_CONTEXT = threading.local()
+LOG_WORKER_LOCK = threading.Lock()
+LOG_WORKER_IDS: dict[int, int] = {}
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 SCI_BBAN_PDF_URL = "https://sci.bban.top/pdf/{doi}.pdf"
@@ -471,8 +474,32 @@ def deep_find_urls(value: Any) -> list[str]:
     return found
 
 
+def current_log_worker() -> str:
+    worker = getattr(LOG_CONTEXT, "worker", None)
+    if worker:
+        return worker
+    return "main"
+
+
+def set_log_worker(worker: str) -> None:
+    LOG_CONTEXT.worker = worker
+
+
+def set_pool_log_worker() -> str:
+    thread_id = threading.get_ident()
+    with LOG_WORKER_LOCK:
+        worker_number = LOG_WORKER_IDS.setdefault(thread_id, len(LOG_WORKER_IDS) + 1)
+    worker = f"w{worker_number}"
+    set_log_worker(worker)
+    return worker
+
+
 def log(message: str) -> None:
-    print(message, flush=True)
+    prefix = f"[{current_log_worker()}]"
+    if not message:
+        print("", flush=True)
+        return
+    print(f"{prefix} {message}", flush=True)
 
 
 def with_retry(func, *, retries: int = 2, delay: float = 1.0, backoff: float = 2.0):
@@ -535,6 +562,43 @@ def article_metadata(article: Article) -> dict[str, Any]:
     return data
 
 
+def empty_openalex_metadata_cache(query: str, page_size: int) -> dict[str, Any]:
+    return {
+        "version": 1,
+        "query": query,
+        "search_param": OPENALEX_SEARCH_PARAM,
+        "page_size": page_size,
+        "sort": "relevance_score:desc",
+        "pages": [],
+    }
+
+
+def load_openalex_metadata_cache(path: Path, query: str, page_size: int) -> dict[str, Any]:
+    if not path.exists():
+        return empty_openalex_metadata_cache(query, page_size)
+    try:
+        cache = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return empty_openalex_metadata_cache(query, page_size)
+
+    if (
+        cache.get("version") != 1
+        or cache.get("query") != query
+        or cache.get("search_param") != OPENALEX_SEARCH_PARAM
+        or cache.get("page_size") != page_size
+        or cache.get("sort") != "relevance_score:desc"
+        or not isinstance(cache.get("pages"), list)
+    ):
+        return empty_openalex_metadata_cache(query, page_size)
+
+    return cache
+
+
+def save_openalex_metadata_cache(path: Path, cache: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    save_json(path, cache)
+
+
 def openalex_search_pages(
     query: str,
     *,
@@ -543,10 +607,46 @@ def openalex_search_pages(
     max_results: int,
     page_size: int,
     timeout: float,
+    cache_path: Path | None = None,
 ) -> Iterator[tuple[int, list[Article], dict[str, Any]]]:
-    cursor = "*"
-    page_number = 1
+    cache = (
+        load_openalex_metadata_cache(cache_path, query, page_size)
+        if cache_path
+        else empty_openalex_metadata_cache(query, page_size)
+    )
     remaining = max_results
+    cached_pages = sorted(cache.get("pages") or [], key=lambda page: int(page.get("page_number") or 0))
+
+    for page in cached_pages:
+        if remaining <= 0:
+            return
+        results = page.get("results") or []
+        if not results:
+            continue
+        page_number = int(page.get("page_number") or 0)
+        meta = page.get("meta") or {}
+        selected_results = results[:remaining]
+        articles = build_openalex_articles(selected_results, query)
+        yield page_number, articles, meta
+        remaining -= len(articles)
+        if len(selected_results) < len(results):
+            return
+
+    if remaining <= 0:
+        return
+
+    if cached_pages:
+        last_page = cached_pages[-1]
+        last_meta = last_page.get("meta") or {}
+        cursor = last_meta.get("next_cursor")
+        page_number = int(last_page.get("page_number") or len(cached_pages)) + 1
+        last_result_count = len(last_page.get("results") or [])
+        last_per_page = int(last_page.get("per_page") or page_size)
+        if not cursor or last_result_count < last_per_page:
+            return
+    else:
+        cursor = "*"
+        page_number = 1
 
     while remaining > 0:
         current_page_size = min(page_size, remaining)
@@ -561,17 +661,31 @@ def openalex_search_pages(
         if api_key:
             params["api_key"] = api_key
 
-        data = get_json(
-            OPENALEX_WORKS_URL,
-            params=params,
-            headers=http_headers(),
-            timeout=timeout,
+        data = with_retry(
+            lambda: get_json(
+                OPENALEX_WORKS_URL,
+                params=params,
+                headers=http_headers(),
+                timeout=timeout,
+            ),
         )
         results = data.get("results") or []
         if not results:
             break
 
         meta = data.get("meta") or {}
+        cache.setdefault("pages", []).append(
+            {
+                "page_number": page_number,
+                "cursor": cursor,
+                "per_page": current_page_size,
+                "meta": meta,
+                "results": results,
+            },
+        )
+        if cache_path:
+            save_openalex_metadata_cache(cache_path, cache)
+
         articles = build_openalex_articles(results, query)
         yield page_number, articles, meta
         remaining -= len(articles)
@@ -1488,6 +1602,7 @@ def main() -> int:
     out_dir = base_out_dir / query_dir_name
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "metadata_and_download_report.json"
+    openalex_cache_path = out_dir / "openalex_metadata_cache.json"
     doi_index_path = base_out_dir / DOI_INDEX_FILENAME
     doi_index = load_doi_index(doi_index_path)
     normalize_index_paths(doi_index, repo_root)
@@ -1503,6 +1618,7 @@ def main() -> int:
     }
 
     log(f"Папка для PDF: {out_dir}")
+    log(f"OpenAlex metadata cache: {openalex_cache_path}")
     log(f"DOI index: {len(doi_index.get('items', {}))} DOI в {doi_index_path}")
     if bootstrapped_dois:
         log(f"DOI index: добавлено из старых отчетов: {bootstrapped_dois}")
@@ -1521,6 +1637,7 @@ def main() -> int:
             max_results=args.max_results,
             page_size=args.page_size,
             timeout=args.timeout,
+            cache_path=openalex_cache_path,
         ))
         for page_number, page_articles, meta in pages:
             total_count = meta.get("count")
@@ -1712,6 +1829,7 @@ def main() -> int:
     old_handler = signal.signal(signal.SIGINT, _on_sigint)
 
     try:
+        set_log_worker("main")
         if args.workers == 1:
             for index, article in enumerate(articles, start=1):
                 if interrupted:
@@ -1724,9 +1842,14 @@ def main() -> int:
             log(f"Worker pool: {args.workers} parallel downloads")
             indexed_articles = list(enumerate(articles, start=1))
             pending_reports: list[tuple[int, dict[str, Any]]] = []
+
+            def process_article_in_worker(index: int, article: Article) -> dict[str, Any]:
+                set_pool_log_worker()
+                return process_article(index, article)
+
             with ThreadPoolExecutor(max_workers=args.workers) as executor:
                 futures = {
-                    executor.submit(process_article, index, article): index
+                    executor.submit(process_article_in_worker, index, article): index
                     for index, article in indexed_articles
                 }
                 for future in as_completed(futures):
