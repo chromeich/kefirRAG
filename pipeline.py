@@ -53,6 +53,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+from progress_web import ProgressWebServer
+
 
 DEFAULT_QUERY = "milk fermentation"
 DEFAULT_PAGE_SIZE = 100
@@ -88,6 +90,7 @@ REPOSITORY_MIRROR_HOST_PRIORITY = {
 LOG_CONTEXT = threading.local()
 LOG_WORKER_LOCK = threading.Lock()
 LOG_WORKER_IDS: dict[int, int] = {}
+PROGRESS_MONITOR: ProgressWebServer | None = None
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 SCI_BBAN_PDF_URL = "https://sci.bban.top/pdf/{doi}.pdf"
@@ -499,7 +502,10 @@ def log(message: str) -> None:
     if not message:
         print("", flush=True)
         return
-    print(f"{prefix} {message}", flush=True)
+    line = f"{prefix} {message}"
+    print(line, flush=True)
+    if PROGRESS_MONITOR:
+        PROGRESS_MONITOR.add_log(line)
 
 
 def with_retry(func, *, retries: int = 2, delay: float = 1.0, backoff: float = 2.0):
@@ -1578,6 +1584,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Search and write metadata, but do not download PDFs.",
     )
+    parser.add_argument(
+        "--no-progress-web",
+        action="store_true",
+        help="Do not start the local worker progress web page.",
+    )
+    parser.add_argument(
+        "--progress-host",
+        default="127.0.0.1",
+        help="Host for the local progress web page. Default: 127.0.0.1.",
+    )
+    parser.add_argument(
+        "--progress-port",
+        type=positive_int,
+        default=8765,
+        help="Port for the local progress web page. If busy, the next free port is used.",
+    )
     args = parser.parse_args()
 
     if args.query_url:
@@ -1594,6 +1616,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    global PROGRESS_MONITOR
+
     args = parse_args()
     query = normalize_text(args.query)
     repo_root = Path(__file__).resolve().parent
@@ -1659,9 +1683,65 @@ def main() -> int:
     else:
         log(f"   Найдено работ: {len(articles)}")
 
+    progress_monitor: ProgressWebServer | None = None
+    if not args.no_progress_web:
+        try:
+            progress_monitor = ProgressWebServer(
+                host=args.progress_host,
+                port=args.progress_port,
+                worker_count=args.workers,
+                query=query,
+            )
+            progress_monitor.set_total(len(articles))
+            progress_url = progress_monitor.start()
+            PROGRESS_MONITOR = progress_monitor
+            log(f"Progress web: {progress_url}")
+        except Exception as exc:
+            log(f"Progress web не запущен: {exc}")
+            progress_monitor = None
+
     doi_index_lock = threading.Lock()
 
+    def progress_start_article(index: int, article: Article) -> None:
+        if progress_monitor:
+            progress_monitor.start_worker(
+                current_log_worker(),
+                doi=article.doi,
+                source=article.source,
+                title=article.title,
+                detail=f"{index}/{len(articles)}",
+            )
+
+    def progress_update_source(article: Article, source: str, detail: str | None = None) -> None:
+        if progress_monitor:
+            progress_monitor.update_worker(
+                current_log_worker(),
+                doi=article.doi,
+                source=source,
+                title=article.title,
+                detail=detail,
+            )
+
+    def progress_finish_article(article_report: dict[str, Any]) -> None:
+        if not progress_monitor:
+            return
+        if article_report.get("download"):
+            status = "done"
+            detail = "PDF скачан"
+        elif article_report.get("duplicate"):
+            status = "done"
+            detail = "DOI-дубликат"
+        elif args.dry_run and article_report.get("source"):
+            status = "done"
+            detail = "dry-run"
+        else:
+            status = "failed"
+            detail = "PDF не найден"
+        progress_monitor.increment_completed()
+        progress_monitor.finish_worker(current_log_worker(), status=status, detail=detail)
+
     def process_article(index: int, article: Article) -> dict[str, Any]:
+        progress_start_article(index, article)
         log("")
         log(f"[{index}/{len(articles)}] {article.title}")
         if article.doi:
@@ -1692,6 +1772,7 @@ def main() -> int:
                 )
                 article_report["source"] = valid_entry.get("source")
                 log(duplicate_log_message(article.doi, valid_entry, skipped_path))
+                progress_finish_article(article_report)
                 return article_report
             log(f"   DOI {clean_doi(article.doi)} найден в индексе, но файл отсутствует. Повторная загрузка...")
 
@@ -1728,6 +1809,7 @@ def main() -> int:
 
         download_step_logged = False
         for step_message, source_name, find_candidates in source_steps:
+            progress_update_source(article, source_name, "поиск источника")
             log(step_message)
             try:
                 source_candidates = dedupe_candidates(with_retry(find_candidates))
@@ -1771,6 +1853,14 @@ def main() -> int:
                     break
 
                 candidate_timeout = download_timeout_for(candidate, args.timeout)
+                if progress_monitor:
+                    progress_monitor.update_worker(
+                        current_log_worker(),
+                        doi=candidate_doi or article.doi,
+                        source=candidate.source,
+                        title=candidate.article_title or article.title,
+                        detail="загрузка PDF",
+                    )
                 log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
                 if candidate_timeout != args.timeout:
                     log(f"   Timeout для {candidate.source}: {candidate_timeout:g}s")
@@ -1816,6 +1906,7 @@ def main() -> int:
         elif not article_report["download"] and not article_report["duplicate"]:
             log("   PDF не скачан для этой работы.")
 
+        progress_finish_article(article_report)
         return article_report
 
     interrupted = False
