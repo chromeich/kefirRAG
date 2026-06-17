@@ -40,8 +40,10 @@ import os
 import re
 import signal
 import sys
+import threading
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -1447,6 +1449,12 @@ def parse_args() -> argparse.Namespace:
         help="HTTP timeout in seconds.",
     )
     parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel workers for candidate lookup/download. Default: 1.",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Re-download PDFs even if a file with the same name exists.",
@@ -1534,148 +1542,133 @@ def main() -> int:
     else:
         log(f"   Найдено работ: {len(articles)}")
 
-    interrupted = False
-    def _on_sigint(signum, frame):
-        nonlocal interrupted
-        interrupted = True
+    doi_index_lock = threading.Lock()
+
+    def process_article(index: int, article: Article) -> dict[str, Any]:
         log("")
-        log("Получен SIGINT (Ctrl+C), завершаю и сохраняю прогресс...")
+        log(f"[{index}/{len(articles)}] {article.title}")
+        if article.doi:
+            log(f"   DOI: {article.doi}")
 
-    import signal
-    old_handler = signal.signal(signal.SIGINT, _on_sigint)
+        article_report: dict[str, Any] = {
+            "article": article_metadata(article),
+            "source": None,
+            "download": None,
+            "duplicate": None,
+            "errors": [],
+        }
 
-    try:
-        for index, article in enumerate(articles, start=1):
-            if interrupted:
-                break
-            log("")
-            log(f"[{index}/{len(articles)}] {article.title}")
-            if article.doi:
-                log(f"   DOI: {article.doi}")
-
-            article_report: dict[str, Any] = {
-                "article": article_metadata(article),
-                "source": None,
-                "download": None,
-                "duplicate": None,
-                "errors": [],
-            }
-
-            article_key = doi_key(article.doi)
+        article_key = doi_key(article.doi)
+        with doi_index_lock:
             doi_entry = doi_index.get("items", {}).get(article_key) if article_key else None
 
-            if doi_entry:
-                candidates = [doi_entry, *(doi_entry.get("duplicate_paths") or [])]
-                valid_entry = next(
-                    (item for item in candidates if item.get("path") and stored_path_exists(item["path"], repo_root)),
-                    None,
-                )
-                if valid_entry:
-                    skipped_path = out_dir / safe_filename(article.title, article.doi)
-                    article_report["duplicate"] = duplicate_report_entry(
-                        article.doi, valid_entry, skipped_path, repo_root,
-                    )
-                    article_report["source"] = valid_entry.get("source")
-                    duplicate_articles.append(article_report["duplicate"])
-                    log(duplicate_log_message(article.doi, valid_entry, skipped_path))
-                    report["articles"].append(article_report)
-                    continue
-                else:
-                    log(f"   DOI {clean_doi(article.doi)} найден в индексе, но файл отсутствует. Повторная загрузка...")
-
-            source_steps = (
-                # ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
-                (
-                    "3. Unpaywall: ищу PDF...",
-                    "Unpaywall",
-                    lambda: unpaywall_candidates(article, email=args.email, timeout=args.timeout),
-                ),
-                # (
-                #     "4. Europe PMC: ищу OA копию...",
-                #     "EuropePMC",
-                #     lambda: europe_pmc_candidates(
-                #         article,
-                #         fallback_query=query,
-                #         email=args.email,
-                #         timeout=args.timeout,
-                #     ),
-                # ),
-                # (
-                #     "5. CORE: резервный поиск...",
-                #     "CORE",
-                #     lambda: core_candidates(
-                #         article,
-                #         fallback_query=query,
-                #         api_key=args.core_key,
-                #         email=args.email,
-                #         timeout=args.timeout,
-                #     ),
-                # ),
-                # ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
+        if doi_entry:
+            candidates = [doi_entry, *(doi_entry.get("duplicate_paths") or [])]
+            valid_entry = next(
+                (item for item in candidates if item.get("path") and stored_path_exists(item["path"], repo_root)),
+                None,
             )
+            if valid_entry:
+                skipped_path = out_dir / safe_filename(article.title, article.doi)
+                article_report["duplicate"] = duplicate_report_entry(
+                    article.doi, valid_entry, skipped_path, repo_root,
+                )
+                article_report["source"] = valid_entry.get("source")
+                log(duplicate_log_message(article.doi, valid_entry, skipped_path))
+                return article_report
+            log(f"   DOI {clean_doi(article.doi)} найден в индексе, но файл отсутствует. Повторная загрузка...")
 
-            download_step_logged = False
-            for step_message, source_name, find_candidates in source_steps:
-                if interrupted:
-                    break
-                log(step_message)
-                try:
-                    source_candidates = dedupe_candidates(with_retry(find_candidates))
-                except ApiError as exc:
-                    article_report["errors"].append({"source": source_name, "error": str(exc)})
-                    log(f"   {source_name} ошибка: {exc}")
-                    continue
+        source_steps = (
+            ("2. SciBban: прямая ссылка по DOI...", "SciBban", lambda: sci_bban_candidates(article)),
+            (
+                "3. Unpaywall: ищу PDF...",
+                "Unpaywall",
+                lambda: unpaywall_candidates(article, email=args.email, timeout=args.timeout),
+            ),
+            (
+                "4. Europe PMC: ищу OA копию...",
+                "EuropePMC",
+                lambda: europe_pmc_candidates(
+                    article,
+                    fallback_query=query,
+                    email=args.email,
+                    timeout=args.timeout,
+                ),
+            ),
+            (
+                "5. CORE: резервный поиск...",
+                "CORE",
+                lambda: core_candidates(
+                    article,
+                    fallback_query=query,
+                    api_key=args.core_key,
+                    email=args.email,
+                    timeout=args.timeout,
+                ),
+            ),
+            ("OpenAlex: проверяю PDF URL из метаданных...", "OpenAlex", lambda: openalex_pdf_candidates(article)),
+        )
 
-                if not source_candidates:
-                    if source_name == "SciBban" and not article.doi:
-                        log("   SciBban пропущен: у статьи нет DOI.")
-                    else:
-                        log(f"   {source_name}: источник не найден.")
-                    continue
+        download_step_logged = False
+        for step_message, source_name, find_candidates in source_steps:
+            log(step_message)
+            try:
+                source_candidates = dedupe_candidates(with_retry(find_candidates))
+            except ApiError as exc:
+                article_report["errors"].append({"source": source_name, "error": str(exc)})
+                log(f"   {source_name} ошибка: {exc}")
+                continue
 
-                log(f"   {source_name}: источников найдено: {len(source_candidates)}")
+            if not source_candidates:
+                if source_name == "SciBban" and not article.doi:
+                    log("   SciBban пропущен: у статьи нет DOI.")
+                else:
+                    log(f"   {source_name}: источник не найден.")
+                continue
 
-                if args.dry_run:
-                    candidate = source_candidates[0]
-                    article_report["source"] = candidate.source
-                    log(f"   Первый найденный источник: {candidate.source}")
-                    break
+            log(f"   {source_name}: источников найдено: {len(source_candidates)}")
 
-                if not download_step_logged:
-                    log("Скачать PDF...")
-                    download_step_logged = True
+            if args.dry_run:
+                candidate = source_candidates[0]
+                article_report["source"] = candidate.source
+                log(f"   Первый найденный источник: {candidate.source}")
+                break
 
-                source_finished = False
-                for candidate in source_candidates:
-                    if interrupted:
-                        break
-                    candidate_doi = candidate.doi or article.doi
+            if not download_step_logged:
+                log("Скачать PDF...")
+                download_step_logged = True
+
+            source_finished = False
+            for candidate in source_candidates:
+                candidate_doi = candidate.doi or article.doi
+                with doi_index_lock:
                     candidate_duplicate = find_doi_duplicate(doi_index, candidate_doi, repo_root)
-                    if candidate_duplicate:
-                        skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
-                        duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
-                        article_report["source"] = candidate_duplicate.get("source") or candidate.source
-                        article_report["duplicate"] = duplicate_info
-                        duplicate_articles.append(duplicate_info)
-                        log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
-                        source_finished = True
-                        break
 
-                    candidate_timeout = download_timeout_for(candidate, args.timeout)
-                    log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
-                    if candidate_timeout != args.timeout:
-                        log(f"   Timeout для {candidate.source}: {candidate_timeout:g}s")
-                    try:
-                        download_result = download_pdf(
-                            candidate,
-                            out_dir=out_dir,
-                            repo_root=repo_root,
-                            email=args.email,
-                            timeout=candidate_timeout,
-                            overwrite=args.overwrite,
-                        )
-                        article_report["source"] = download_result.get("source")
-                        article_report["download"] = download_result
+                if candidate_duplicate:
+                    skipped_path = out_dir / safe_filename(candidate.article_title, candidate_doi)
+                    duplicate_info = duplicate_report_entry(candidate_doi, candidate_duplicate, skipped_path, repo_root)
+                    article_report["source"] = candidate_duplicate.get("source") or candidate.source
+                    article_report["duplicate"] = duplicate_info
+                    log(duplicate_log_message(candidate_doi, candidate_duplicate, skipped_path))
+                    source_finished = True
+                    break
+
+                candidate_timeout = download_timeout_for(candidate, args.timeout)
+                log(f"   Пробую {candidate.source}: {redact_url(candidate.url)}")
+                if candidate_timeout != args.timeout:
+                    log(f"   Timeout для {candidate.source}: {candidate_timeout:g}s")
+                try:
+                    download_result = download_pdf(
+                        candidate,
+                        out_dir=out_dir,
+                        repo_root=repo_root,
+                        email=args.email,
+                        timeout=candidate_timeout,
+                        overwrite=args.overwrite,
+                    )
+                    article_report["source"] = download_result.get("source")
+                    article_report["download"] = download_result
+                    with doi_index_lock:
                         if register_doi_entry(
                             doi_index,
                             doi=candidate_doi,
@@ -1687,32 +1680,72 @@ def main() -> int:
                             report_path=None,
                         ):
                             save_doi_files(base_out_dir, doi_index, repo_root)
-                        log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
-                        source_finished = True
-                        break
-                    except DownloadError as exc:
-                        error = str(exc)
-                        article_report["errors"].append({"source": candidate.source, "error": error})
-                        log(f"   Не получилось: {candidate.source}: {error}")
-                        time.sleep(0.5)
-
-                if source_finished:
+                    log(f"   Готово: {download_result['path']} ({download_result['bytes']} bytes)")
+                    source_finished = True
                     break
+                except DownloadError as exc:
+                    error = str(exc)
+                    article_report["errors"].append({"source": candidate.source, "error": error})
+                    log(f"   Не получилось: {candidate.source}: {error}")
+                    time.sleep(0.5)
+
+            if source_finished:
+                break
+
+            log(f"   {source_name}: рабочий PDF не найден, перехожу к следующему источника.")
+
+        if args.dry_run:
+            log("Скачать PDF: dry-run, пропускаю загрузку.")
+        elif not article_report["download"] and not article_report["duplicate"]:
+            log("   PDF не скачан для этой работы.")
+
+        return article_report
+
+    interrupted = False
+
+    def _on_sigint(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+        log("")
+        log("Получен SIGINT (Ctrl+C), завершаю и сохраняю прогресс...")
+
+    old_handler = signal.signal(signal.SIGINT, _on_sigint)
+
+    try:
+        if args.workers == 1:
+            for index, article in enumerate(articles, start=1):
                 if interrupted:
                     break
+                article_report = process_article(index, article)
+                report["articles"].append(article_report)
+                if article_report.get("duplicate"):
+                    duplicate_articles.append(article_report["duplicate"])
+        else:
+            log(f"Worker pool: {args.workers} parallel downloads")
+            indexed_articles = list(enumerate(articles, start=1))
+            pending_reports: list[tuple[int, dict[str, Any]]] = []
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                futures = {
+                    executor.submit(process_article, index, article): index
+                    for index, article in indexed_articles
+                }
+                for future in as_completed(futures):
+                    if interrupted:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+                    index = futures[future]
+                    article_report = future.result()
+                    pending_reports.append((index, article_report))
+                    if article_report.get("duplicate"):
+                        duplicate_articles.append(article_report["duplicate"])
 
-                log(f"   {source_name}: рабочий PDF не найден, перехожу к следующему источника.")
-
-            if args.dry_run:
-                log("Скачать PDF: dry-run, пропускаю загрузку.")
-            elif not article_report["download"] and not article_report["duplicate"]:
-                log("   PDF не скачан для этой работы.")
-
-            report["articles"].append(article_report)
+            report["articles"].extend(
+                article_report for _, article_report in sorted(pending_reports, key=lambda item: item[0])
+            )
     finally:
+        signal.signal(signal.SIGINT, old_handler)
         if interrupted:
             try_finalize(args, base_out_dir, doi_index, repo_root, report, report_path, downloaded, duplicate_articles, openalex_total_works)
-            signal.signal(signal.SIGINT, old_handler)
             raise KeyboardInterrupt
 
     downloaded = [item for item in report["articles"] if item.get("download")]
